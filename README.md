@@ -1,7 +1,7 @@
 # scBAMpler
 
 <p align ="center">
-<img src='https://github.com/aseveritt/scBAMpler/docs/scBAMpler.png' height="150">
+<img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' height="150">
 </p>
 
 [![DOI](TBD)
@@ -15,15 +15,22 @@ Please clone the repository:
 
     $ git clone git+https://github.com/aseveritt/scBAMpler.git
 
-Then, create an environment with required dependencies. Installation and information about miniforge can be found [![here](https://github.com/conda-forge/miniforge)
+Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
     $ miniforge create -n scBAMpler_env python=3.10 numpy scipy pandas jupyter samtools bamTools macs3
 
 
 ---------------
+## Download Test Data
+```
+$ cd test_data
+$ scp ### HEPG2_subset.bam
 
-## Data Quality Usage:
+```
 
+## Data Quality Usage
+
+### 1. Call Peak Locations
 First, prepare your peak file. It is only strictly neccessary for the file to have XYZ. 
 If you would like to use our mansucripts peak standardization code, we provide the code here, but it is not strictly neccessary. 
 ```
@@ -55,6 +62,7 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
     - info
 
 
+### 2. Build Cell Type Input Dictionaries
 Next, build the dictionaries for each cell-type you would like to downsample:
 
 ```
@@ -84,7 +92,7 @@ In the output folder given in `--outdir`, the following files and folder structu
     - \<outdir\>idk.stats
     
 
-
+### 3. Strategically Downsample BAM
 Next, specify what feature to downsample and the extent. If you request a number larger than the cell population allows, it will give an error. 
 
 ```
@@ -115,7 +123,7 @@ $ scBAMpler sampler \
 
 ---------------
 
-## Cell Homogeneity Usage:
+## Cell Homogeneity Extension
 
     $ command
 
