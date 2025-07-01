@@ -1,8 +1,19 @@
-import argparse
+import argparse, sys, os
 from build_dict import main as main_BuildInput
 from perform_sampling import main as main_Sampling
 
-def main():
+def main(argv=None):
+
+    #Clean up arguments in case they're passed with tabs or newlines on accident.
+    #section via ChatGPT
+    raw_args = sys.argv[1:] if argv is None else argv
+    cleaned_args = []
+    for arg in raw_args:
+        if '\t' in arg or '\n' in arg or ' ' in arg:
+            cleaned_args.extend(shlex.split(arg))
+        else:
+            cleaned_args.append(arg)
+
     parser = argparse.ArgumentParser(prog="scBAMpler")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -38,10 +49,18 @@ def main():
     parser_sampler.add_argument('-b', '--bam_file', 
                                 help='name of original bam file', required=True, type=str)
 
-    args = parser.parse_args()
+    args = parser.parse_args(cleaned_args)
 
     if args.command == "create-dictionary":
+        def validatefile(arg):
+            if not os.path.isfile(arg): parser.error('The file "{}" does not exist!'.format(arg))
+            else: return 
+        validatefile(args.bam_file)
+        validatefile(args.peak_file)
+        if args.intersect_file is not None: validatefile(args.intersect_file)
+            
         main_BuildInput(args)
+        
     elif args.command == "sampler":
         main_Sampling(args)
 

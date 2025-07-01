@@ -16,6 +16,7 @@ Please clone the repository:
 Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
     $ miniforge create -n scBAMpler_env python=3.10 numpy scipy pandas jupyter samtools bamTools macs3
+    $ pip install --editable .
 
 
 ---------------
@@ -68,26 +69,6 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
 #### Output
 * `<outdir>/*_standardized_<peak_length>bp.bed`  
     - Standardized peaks in BED6 format.
-    - 
-#### Input parameters
-* --bam_file
-    - Path to BAM file
-* --outdir
-    - Path to output directory
-* --peak_length
-    - Standardize all peaks to this length
-* --cores
-    - optional, Number of cores available to mclapply
-* --txdb
-    - Txdb package used in get chromosomes lengths, default TxDb.Hsapiens.UCSC.hg38.knownGene
-* --exclusion_file
-    - List of regions to exclude from peak regions. 
-* --summit_file
-    - If MACS3 file already exists, just run standardization section. 
-
-#### Output
-* /outdir/*_standardized_<peak_length>bp.bed
-    - BED6 formatted output 
 
 
 ### 2. Build Cell Type Input Dictionaries
@@ -97,7 +78,7 @@ Next, build the dictionaries for each cell-type you would like to downsample:
 $ scBAMpler create-dictionary \
     --bam test_data/HEPG2_subset.bam \
     --peak_file test_data/HEPG2_subset_standardized_500bp.bed \
-    --output_file test_data/HEPG2_subset.pickle \
+    --output_file test_data/HEPG2_subset.pickle
 ```
    
 #### Input parameters  

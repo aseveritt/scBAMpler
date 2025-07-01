@@ -208,3 +208,6 @@ __marimo__/
 
 #AMANDA stuff
 test_data/HEPG2_subset.bam
+test_data/HEPG2_subset.bam.bai
+test_data/HEPG2_subset.peaks.bed.gz
+

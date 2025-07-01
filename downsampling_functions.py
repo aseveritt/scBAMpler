@@ -1,13 +1,13 @@
 #downsampling_functions.py
 
-import pysam, os, subprocess, sys, io, itertools, pickle, time
+import pysam, os, subprocess, sys, io, itertools, pickle, functools #time
 import pandas as pd
 import numpy as np
-from datetime import timedelta
 from collections import Counter
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 from pathlib import Path
-from tqdm import tqdm
+#from tqdm import tqdm
+from datetime import timedelta, datetime
 
 def internal_timer(func):
     @functools.wraps(func)
