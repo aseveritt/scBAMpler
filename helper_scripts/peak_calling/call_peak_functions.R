@@ -9,7 +9,6 @@ suppressPackageStartupMessages({
   library(stringr)
   library(data.table)
   library(parallel)
-  library(txdb_pkg, character.only = TRUE)
 })
 
 `%ni%` <- Negate(`%in%`)
@@ -148,8 +147,9 @@ checkfinalhits <- function(gr){
 standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, txdb, ncores){
 
     if (!requireNamespace(txdb, quietly = TRUE)) {
-        stop(sprintf("Package '%s' not installed.", txdb))
+        stop(sprintf("TxDb package '%s' not found. Please install it before proceeding.", txdb))
     }
+    suppressPackageStartupMessages({library(txdb, character.only = TRUE)})
     
   ########################
   # Load Summits File
@@ -191,7 +191,7 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   
   ########################
   # Make sure chromosome boundaries aren't invalidated
-  chrom_lengths <- seqlengths(txdb)
+  chrom_lengths <- seqlengths(get(txdb))
   out_of_bounds <- gr_filt_resized[end(gr_filt_resized) > chrom_lengths[as.character(seqnames(gr_filt_resized))]]
   if (length(out_of_bounds) > 0){print(paste("ERROR, regions out of bounds", out_of_bounds))}
   
@@ -213,10 +213,10 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   ########################
   # Output them
   if (unique(width(gr_filt_resized)) != peaklen){print(paste("ERROR, regions not equal length", unique(width(gr_filt_resized))))}
-  gr_filt_resized = sort(gr_filt_resized) #YOU HAVE TO SORT ITTT
+  gr_filt_resized = sort(gr_filt_resized) #you HAVE to sort it.
   
   cl = gsub("_summits.bed", "", basename(summit_file))
-  export(gr_filt_resized, paste0(out_dir, cl, "_filt_", peaklen, "bp.exclusion.bed"), format = "bed")
+  export(gr_filt_resized, paste0(out_dir, cl, "_standardized_", peaklen, "bp.bed"), format = "bed")
   
 }
 

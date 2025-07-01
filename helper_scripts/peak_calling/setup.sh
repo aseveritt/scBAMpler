@@ -3,7 +3,7 @@
 eval "$(conda shell.bash hook)"
 
 # Create and activate environment
-conda env create -f helper_scripts/peak_calling/macs_env.yml
+conda create -n macs_Renv pip r-base macs3
 conda activate macs_Renv
 
 Rscript install_R_packages.R

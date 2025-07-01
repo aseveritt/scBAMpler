@@ -3,7 +3,7 @@
 <img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
-scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, fraction of reads in peaks (FRiP), and cell-to-cell omogeneity while preserving the original cell attributes. 
+scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. 
 
 ![DOI](TBD)
 
@@ -32,35 +32,62 @@ $ scp ### HEPG2_subset.bam
 ## Data Quality Usage
 
 ### 1. Call Peak Locations
-First, prepare your peak file. It is only strictly neccessary for the file to have XYZ. 
-If you would like to use our mansucripts peak standardization code, we provide the code here, but it is not strictly neccessary. 
+
+First, prepare your peak file. This can be done using any method you prefer—the only strict requirement is that the file be in **BED6 format**.
+If you would like to use the peak standardization code from our manuscript, we provide it here:
+
 ```
-$ bash helper_scripts/peak_calling/setup.sh 
+$ bash helper_scripts/peak_calling/setup.sh
+# ~20 min
+
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
-    --bam test_data/HEPG2_subset.bam \
+    --bam_file test_data/HEPG2_subset.bam \
     --outdir test_data/ \
-    --peak_len 500 \
+    --peak_length 500 \
     --cores 4
+# ~10 min on subset (2.8Gb), ~45 min on full set (14.Gb)
 ```
-##### Input parameters
-* --bam
+
+#### Input Parameters
+* `--bam_file`  
+    - Path to the input BAM file.
+* `--outdir`  
+    - Directory where output file will be saved.
+* `--peak_length`  
+    - Length to which all peaks will be standardized.
+* `--txdb`  
+    - TxDb package used to get chromosome lengths.  
+      Default: `TxDb.Hsapiens.UCSC.hg38.knownGene`
+* `--cores` *(optional)*  
+    - Number of cores to use with `mclapply`.
+* `--exclusion_file` *(optional)*  
+    - BED file listing regions to exclude from peak calling.
+* `--summit_file` *(optional)*  
+    - Use this if a MACS3 file already exists to run only the standardization step.
+
+#### Output
+* `<outdir>/*_standardized_<peak_length>bp.bed`  
+    - Standardized peaks in BED6 format.
+    - 
+#### Input parameters
+* --bam_file
     - Path to BAM file
 * --outdir
     - Path to output directory
-* --peak_len
+* --peak_length
     - Standardize all peaks to this length
 * --cores
     - optional, Number of cores available to mclapply
 * --txdb
     - Txdb package used in get chromosomes lengths, default TxDb.Hsapiens.UCSC.hg38.knownGene
-* --exclusion_list
+* --exclusion_file
     - List of regions to exclude from peak regions. 
-* --summitfile
+* --summit_file
     - If MACS3 file already exists, just run standardization section. 
 
-##### Output
-* --bam
-    - info
+#### Output
+* /outdir/*_standardized_<peak_length>bp.bed
+    - BED6 formatted output 
 
 
 ### 2. Build Cell Type Input Dictionaries
@@ -69,7 +96,7 @@ Next, build the dictionaries for each cell-type you would like to downsample:
 ```
 $ scBAMpler create-dictionary \
     --bam test_data/HEPG2_subset.bam \
-    --peak_file test_data/? \
+    --peak_file test_data/HEPG2_subset_standardized_500bp.bed \
     --output_file test_data/HEPG2_subset.pickle \
 ```
    

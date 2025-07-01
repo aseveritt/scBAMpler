@@ -10,4 +10,4 @@ BiocManager::install(c(
   "data.table",
   "parallel",
   "TxDb.Hsapiens.UCSC.hg38.knownGene"
-), ask = FALSE, update = FALSE)
+), ask = FALSE)
