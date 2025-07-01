@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 #AMANDA stuff
-test_data/*
+test_data/HEPG2_subset.bam

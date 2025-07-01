@@ -1,7 +1,7 @@
 # scBAMpler
 
 <p align ="center">
-<img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' height="150">
+<img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
 [![DOI](TBD)
