@@ -1,13 +1,11 @@
-# scBAMpler
 
 <p align ="center">
 <img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
-[![DOI](TBD)
-[![Docs](TBD)
-
 scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, fraction of reads in peaks (FRiP), and cell-to-cell omogeneity while preserving the original cell attributes. 
+
+![DOI](TBD)
 
 ## Installation
 
@@ -21,12 +19,15 @@ Then, create an environment with required dependencies. Installation and informa
 
 
 ---------------
+
 ## Download Test Data
 ```
 $ cd test_data
 $ scp ### HEPG2_subset.bam
 
 ```
+
+---------------
 
 ## Data Quality Usage
 
