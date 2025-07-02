@@ -1,4 +1,4 @@
-import argparse, sys, os
+import argparse, sys
 from build_dict import main as main_BuildInput
 from perform_sampling import main as main_Sampling
 
@@ -20,15 +20,15 @@ def main(argv=None):
     # Subcommand: create-dictionary
     parser_buildInput = subparsers.add_parser("create-dictionary", help="Create Input Dictionary for scBAMpler:sampling")
     parser_buildInput.add_argument('-b', '--bam_file', 
-                                   help='path to bam file', required=True, type=str)
+                                   help='Path to the coordinate sorted, input BAM file.', required=True, type=str)
     parser_buildInput.add_argument('-p', '--peak_file', 
-                                   help='path to bed file of called peaks', required=True, type=str)
+                                   help='Path to peak file in BED6 format', required=True, type=str)
     parser_buildInput.add_argument('-o', '--output_file', 
-                                   help='name of output pickle file', required=True, type=str)
+                                   help='Name and location of final cell type dictionary stored as a pickle file', required=True, type=str)
     parser_buildInput.add_argument('-i', '--intersect_file', 
-                                   help='optional, provide mapping of peak-to-reads', required=False, default=None, type=str)
+                                   help='optional, if the cell barcode:peak read mapping (*.bed.gz) already exists, you can provide it here to skip that initial step.', required=False, default=None, type=str)
     parser_buildInput.add_argument('--delete_intersect', 
-                                   help='delete output of bedtools', required=False, action="store_true")
+                                   help='By default, cell barcode:peak read mapping file is saved. Setting this flag will delete it.', required=False, action="store_true")
     
     # Subcommand: sampler
     parser_sampler = subparsers.add_parser("sampler", 
@@ -50,15 +50,8 @@ def main(argv=None):
                                 help='name of original bam file', required=True, type=str)
 
     args = parser.parse_args(cleaned_args)
-
+        
     if args.command == "create-dictionary":
-        def validatefile(arg):
-            if not os.path.isfile(arg): parser.error('The file "{}" does not exist!'.format(arg))
-            else: return 
-        validatefile(args.bam_file)
-        validatefile(args.peak_file)
-        if args.intersect_file is not None: validatefile(args.intersect_file)
-            
         main_BuildInput(args)
         
     elif args.command == "sampler":

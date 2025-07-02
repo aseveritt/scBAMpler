@@ -46,12 +46,13 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
     --outdir test_data/ \
     --peak_length 500 \
     --cores 4
-# ~10 min on subset (2.8Gb), ~45 min on full set (14.Gb)
+
+# ~XX min on subset (2.8Gb), ~XX min on full set (XX)
 ```
 
 #### Input Parameters
 * `--bam_file`  
-    - Path to the input BAM file.
+    - Path to the coordinate-sorted input BAM file.
 * `--outdir`  
     - Directory where output file will be saved.
 * `--peak_length`  
@@ -71,34 +72,38 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
     - Standardized peaks in BED6 format.
 
 
+
+
+
 ### 2. Build Cell Type Input Dictionaries
-Next, build the dictionaries for each cell-type you would like to downsample:
+Next, build a dictionary for each cell type you want to downsample.  
+We assume the BAM file contains a cell barcode tag in the form `CB:Z:*`.
 
 ```
 $ scBAMpler create-dictionary \
     --bam test_data/HEPG2_subset.bam \
     --peak_file test_data/HEPG2_subset_standardized_500bp.bed \
     --output_file test_data/HEPG2_subset.pickle
+
+# ~10 min on subset (2.8Gb), ~XX min on full set (XX)
 ```
    
 #### Input parameters  
-* --bam
-    - Path to BAM file
-* --peak_file
-    - Path to peak file in BED4 file? 
-* --out_file
-    - Name and location of final cell type dictionary stored as a pickle file
-* --intersect_file
-    - optional, provide an external file that maps reads to peaks. Must be in the form XYZ. 
-* --delete_intersect
-    - optional, by default the intersect file discussed above is stored. This flag will automatically delete it. 
+* `--bam`
+    - Path to the coordinate-sorted input BAM file.
+* `--peak_file`
+    - Path to the peak file in BED6 format.
+* `--out_file`
+    - Path where the final dictionary will be saved (as a `.pickle` file).
 
 #### Output    
-
-In the output folder given in `--outdir`, the following files and folder structure will be created:
-    - \<outdir\>/\<TF\>_overview.pickle
-      This is a pickle file, or a compressed python file, that contains the dictionary of all cell barcodes, and the required encoders to numerically
-    - \<outdir\>idk.stats
+* `<output_file>`  
+    - A Python pickle file containing a dictionary of all cell barcodes, their mapping to peak and non-peak reads, and the necessary numeric encoders. (e.g. HEPG2_subset.pickle)
+* `<outfile>`.summary.txt
+    - A plain-text file with summary statistics about the cell type.  (e.g. HEPG2_subset.summary.txt)
+* `<outfile>`.reads_in_peaks.bed.gz  *(optionally, deleted with --delete_intersect flag)*
+    - A gzipped BED-like file with two columns: cell barcode and associated peak-read QNAMEs.  
+      *(Optionally deleted using the `--delete_intersect` flag.)*
     
 
 ### 3. Strategically Downsample BAM

@@ -1,12 +1,10 @@
 #downsampling_functions.py
 
-import pysam, os, subprocess, sys, io, itertools, pickle, functools #time
+import pysam, os, subprocess, sys, io, itertools, functools, pickle
 import pandas as pd
 import numpy as np
 from collections import Counter
-#import matplotlib.pyplot as plt
 from pathlib import Path
-#from tqdm import tqdm
 from datetime import timedelta, datetime
 
 def internal_timer(func):
@@ -19,6 +17,7 @@ def internal_timer(func):
         return result
     return wrapper_decorator
     
+
 #FUNCTIONS FOR CREATING THE DICTIONARY + OBJECT
 #################################################
 
@@ -87,7 +86,7 @@ def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600):
     #timeout in 6hrs. 
 
     awk_statement = '{for (i=12; i<=NF; ++i) { if ($i ~ "^CB:Z:"){sub(/^CB:Z:/, "", $i); print $i, $1 }}}'
-    cmd = "set -o pipefail; bedtools intersect -a %s -b %s -sorted -f 0.75 | samtools view - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
+    cmd = "set -o pipefail; bedtools intersect -abam %s -b %s -sorted -f 0.75 -ubam | samtools view -h - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
     try:
         subprocess.check_output(cmd, shell=True, executable='/bin/bash', stderr=subprocess.STDOUT, timeout=timeout)
     except subprocess.CalledProcessError as e:
@@ -98,6 +97,7 @@ def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600):
     
     return
 
+    
 @internal_timer
 def AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, delete):
     rip_df  = pd.read_csv(intersect_file, compression='gzip', header=None, sep=' ', names=["cb", "qname"])
@@ -443,30 +443,6 @@ def DownsampleFRIP(cb_dict, frip, seed=1):
     else: print("ERROR current and desired frip are identical. Please fix"); sys.exit(1)
     
     CleanCells(cb_dict)
-    return
- 
-    
-def PlotDifferences(cb_dict, N):
-    #not super useful function, but it will plot the difference 
-    #in sampling reads w/ and w/out weighting.
-    #can remove later, just for a quick gut check + visualizations
-    
-    plt.subplots(1, 2, sharey=True)
-    plt.subplot(1,2,1)
-    ResetEdits()
-    ChooseCells(cb_dict, N=int(N), sample_case = "random")
-    diff_dict = [cb_dict[el].n_edits/cb_dict[el].readcount for el in cb_dict]
-    plt.hist(diff_dict, bins=50)
-    plt.xlabel('N edits/ N total read pairs')
-    plt.title('Weighted-Sampling')
-    
-    plt.subplot(1,2,2)
-    ResetEdits()
-    ChooseCells(cb_dict, N=int(N), weighted=False, sample_case = "random")
-    diff_dict = [cb_dict[el].n_edits/cb_dict[el].readcount for el in cb_dict]
-    plt.hist(diff_dict, bins=50)
-    plt.xlabel('N edits/ N total read pairs')
-    plt.title('Unweighted-Sampling')
     return
 
 
