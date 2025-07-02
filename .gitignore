@@ -208,4 +208,6 @@ __marimo__/
 
 #AMANDA stuff
 test_data/*
-!test_data/fetch_test_data.txt
+!test_data/fetch_testdata.txt
+example_output/*
+!example_output/fetch_exampleoutput.txt

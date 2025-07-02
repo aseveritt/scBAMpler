@@ -10,10 +10,12 @@ from datetime import timedelta, datetime
 def internal_timer(func):
     @functools.wraps(func)
     def wrapper_decorator(*args, **kwargs):
+        verbose = kwargs.get("verbose", True)
         start_time = datetime.now()
         result = func(*args, **kwargs)  # No extra reference
         end_time = datetime.now()
-        print(f"--- {end_time - start_time} h:m:s to run '{func.__name__}' ---")
+        if verbose:
+            print(f"--- {end_time - start_time} h:m:s to run '{func.__name__}' ---")
         return result
     return wrapper_decorator
     
@@ -116,13 +118,11 @@ def AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, delete):
     grouped_results_filt = grouped_results.dropna()
     q_dict = grouped_results_filt.to_dict()
 
-    #for curr_cb in tqdm(q_dict.keys(), desc="Progress Adding Peak Info"): #for all cb we need to update
     for curr_cb in q_dict.keys(): #for all cb we need to update
         curr_cb_int = cb_encoder[curr_cb]
         idxs = np.where(np.isin(cb_dict[curr_cb_int].readslist, q_dict[curr_cb]))[0]
         cb_dict[curr_cb_int].peaklist[idxs] = 1 
 
-    #for cb_int in tqdm(cb_dict.keys(), desc="Progress Adding Peak Totals"):
     for cb_int in cb_dict.keys():
         m = cb_dict[cb_int].peaklist
         ones_count = np.count_nonzero(m==1)
@@ -161,7 +161,7 @@ def TotalReadPairs(cb_dict):
 def Summary(cb_dict, output_as = "str"):
     #Function to summarize what is going on in cb_dict. 
     #output_as = "str" essentially stdout. helpful for debugging
-    #otuput_as = "dict" what I plan on outputting per iteration for visualizations/tracking later on. 
+    #otuput_as = "dict" outputting per iteration for visualizations/tracking later on. 
     
     def count_edits(cb_dict):
         edit_list = [int(cb_dict[i].n_edits) for i in cb_dict.keys()]
@@ -306,7 +306,7 @@ def RemoveReads(cell_object, seed, sample_case):
 
 def CleanCells(cb_dict):
     #sometimes we can remove all reads from a cell barcode. 
-    #this function just removes those from the dict so we can see how many are lost. 
+    #this function just removes those from the dict so we can see how many are completely lost. 
     
     rem_list = []
     for item in cb_dict.keys():
@@ -318,16 +318,31 @@ def CleanCells(cb_dict):
     return
 
 
+@internal_timer
+def OutputDict(cb_dict, encoder, out_readfile, verbose):
+    
+    tmp = [v.readslist for v in cb_dict.values()] #numeric list of reads needed. 
+    results_int = list(itertools.chain.from_iterable(tmp)) 
+    
+    inv_encoder = {v: k for k, v in encoder.items()} #invert the cb_encoder dictionary.
+    results_str = [inv_encoder[i] for i in results_int]
+    results_str = sorted(results_str) #easier later, but can remove depending on how long it takes
 
-def OutputDict(cb_dict, encoder, myfile, case, tag="FIXME"):
+    with open(out_readfile, mode='wt', encoding='utf-8') as f:
+        for i in results_str: f.write(i+"\n")
+    
+    return
+    
+@internal_timer
+def OutputDict_DEFUNCT(cb_dict, encoder, myfile, case, tag="FIXME"):
     #output dictionary as a txt file of either 
     #1) "reads" seperated by newlines
-    ###(note this is NOT sorted, so probably need to fix later)
+    ### (note this is NOT sorted, so probably need to fix later)
     #2) "cells" which is cells+tab+tag which fits with sinto needs. 
     
     if case == "reads" or case == "frip" or case == "peakreads":
         tmp = [v.readslist for v in cb_dict.values()]
-        results_int = list(itertools.chain.from_iterable(tmp))
+        results_int = list(itertools.chain.from_iterable(tmp)) #numeric list of reads needed. 
         
         inv_encoder = {v: k for k, v in encoder.items()} #invert the cb_encoder dictionary.
         results_str = [inv_encoder[i] for i in results_int]
@@ -354,7 +369,8 @@ def OutputDict(cb_dict, encoder, myfile, case, tag="FIXME"):
 #################################################
 ## FUNCTIONS SPECIFIC TO DOWNSAMPLING CELLS
 
-def DownsampleCells(cb_dict, N_cells, seed=1):
+@internal_timer
+def DownsampleCells(cb_dict, N_cells, seed, verbose):
     
     #set seed, randomly choose N cell barcodes without replacement. 
     #either return as a (1) dictionary -- for consistency with other functions
@@ -369,13 +385,13 @@ def DownsampleCells(cb_dict, N_cells, seed=1):
 #################################################
 ## FUNCTIONS SPECIFIC TO DOWNSAMPLING READS
 
-def DownsampleReads(cb_dict, N_desired_reads, seed=1):
-    
-    #Total reads is actually total read-pairs, need to figure out which way I prefer going forward. 
+@internal_timer
+def DownsampleReads(cb_dict, N_desired_reads, seed, verbose):
+
     total_reads = TotalReadPairs(cb_dict)
     Nreads_to_remove = total_reads-N_desired_reads
     if (total_reads < Nreads_to_remove): 
-        print("ERROR: Removing more read pairs than exists")
+        print("ERROR: Requested to remove more read pairs than currently exists")
         sys.exit(1)
     
     #choose which cells are going to get downsampled and by how much. stored in {'cb1':{n_edits = 3}}
@@ -390,31 +406,11 @@ def DownsampleReads(cb_dict, N_desired_reads, seed=1):
     return
 
 
-def DownsamplePeakReads(cb_dict, N_desired_reads, seed=1):
-     
-    curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
-    Nreads_to_remove = peakPairs-N_desired_reads
-    if (peakPairs < Nreads_to_remove): 
-        print("ERROR: Removing more read pairs than exists")
-        sys.exit(1)
-    
-    #choose which cells are going to get downsampled and by how much. stored in {'cb1':{n_edits = 3}}
-    ChooseCells(cb_dict, N=Nreads_to_remove, seed=seed, sample_case ="peaks")
-    
-    #Remove the read from that cb's Cells() object (in place so nothing to return)
-    #iterating through all keys here, but that function will quickly bail if no edits need to be made. 
-    for item in cb_dict.keys():
-        RemoveReads(cb_dict[item], seed=seed, sample_case="peaks")
-
-    CleanCells(cb_dict) 
-    return
-
-
 #################################################
 ## FUNCTIONS SPECIFIC TO DOWNSAMPLING FRIP
 
-    
-def DownsampleFRIP(cb_dict, frip, seed=1):
+@internal_timer
+def DownsampleFRIP(cb_dict, frip, seed, verbose):
     curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
     desired_frip = frip
      
@@ -454,9 +450,22 @@ def _submit_cmd(cmd, err = "ERROR"):
         print(err, stderr_output.decode())
     except Exception as e:
         print(err, str(e))
-            
-            
-def GenerateOutputBam(input_type, bam_file, input_file, nproc, output_dir, output_file=None):
+
+
+
+@internal_timer   
+def GenerateOutputBam(input_bam, read_file, nproc, output_file, verbose):
+        
+    cmd = 'samtools view -N %s -o %s %s -@ %s' % (read_file, output_file, input_bam, str(nproc))
+    _submit_cmd(cmd, "ERROR: in generate output bam")
+    
+    cmd2 = 'samtools index %s' % output_file
+    _submit_cmd(cmd2, "ERROR: in indexing output bam")
+    return 0
+
+    
+@internal_timer   
+def GenerateOutputBam_DEFUNCT(input_type, bam_file, input_file, nproc, output_dir, output_file=None):
           
     full_path_output = '%s/%s' % (output_dir, output_file) #have to do this bc programs want different things unfortunately. 
     
@@ -475,9 +484,31 @@ def GenerateOutputBam(input_type, bam_file, input_file, nproc, output_dir, outpu
     cmd2 = 'samtools index %s' % full_path_output
     _submit_cmd(cmd2, "ERROR: in generate output bam")
     return 0
-        
+
     
-def GenerateOuputFragment(input_bam, nproc):
+@internal_timer
+def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):    
+    tmp_output = output_fragment + "_tmp"
+    sample_name = os.path.splitext(os.path.basename(output_fragment))[0]
+    
+    cmd1 = "sinto fragments --collapse_within -p %s -b %s -f %s > /dev/null" % (nproc, input_bam, tmp_output)
+    _submit_cmd(cmd1, "ERROR: in sinto fragment creation (step 1)")
+    
+    #pound and dash do not work btw for archr. 
+    awk_part = '{print $1, $2, $3, "%s:"$4, $5}' % sample_name
+    cmd2 = fr"bedtools sort -i {tmp_output} | awk '{awk_part}' | tr ' ' '\t' | bgzip -c > {output_fragment}"
+    _submit_cmd(cmd2, "ERROR: bedtools bgzipped (step 2)")
+    
+    #cmd3 = f"tabix {outfile}"
+    #_submit_cmd(cmd3, "ERROR: in indexing bgzipped (step 3)")
+    
+    cmd4 = f"rm {tmp_output}"
+    _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
+    
+    return
+    
+
+def GenerateOuputFragment_DEFUNCT(input_bam, output_fragment, nproc):
 
     maindir = os.path.dirname(input_bam)
     out_name = Path(input_bam).stem
@@ -502,9 +533,9 @@ def GenerateOuputFragment(input_bam, nproc):
     
     return
 
-
-def WriteLog(output_file, a, b, c):
-    logfile = open(os.path.splitext(output_file)[0]+'.summary.txt', 'w')
+@internal_timer
+def WriteLog(output_file, a, b, c, verbose):
+    logfile = open(output_file, 'w')
     
     logfile.write("## params ##\n")
     for k,v in a.items(): logfile.write(f"{k}\t{v}\n")

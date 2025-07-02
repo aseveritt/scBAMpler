@@ -3,9 +3,9 @@
 <img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
-scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. 
+scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. For details, please see:
 
-![DOI](TBD)
+[Comparative evaluation of genomic footprinting algorithms for predicting transcription factor binding sites in single-cell data.](TBD)
 
 ## Installation
 
@@ -23,9 +23,13 @@ Then, create an environment with required dependencies. Installation and informa
 
 ## Download Test Data
 ```
-$ cd test_data
-$ scp ### HEPG2_subset.bam
+$ cd scBAMpler
+$ scp -R ### test_data/
+#roughly XXGb in size
 
+# optionally, if you would like to see the example output directory without running the tutorial:
+$ scp -R ## ./example_output
+#roughly XXGb in size
 ```
 
 ---------------
@@ -83,7 +87,8 @@ We assume the BAM file contains a cell barcode tag in the form `CB:Z:*`.
 $ scBAMpler create-dictionary \
     --bam test_data/HEPG2_subset.bam \
     --peak_file test_data/HEPG2_subset_standardized_500bp.bed \
-    --output_file test_data/HEPG2_subset.pickle
+    --output_file example_output/HEPG2_subset.pickle \
+    --verbose
 
 # ~10 min on subset (2.8Gb), ~XX min on full set (XX)
 ```
@@ -95,45 +100,100 @@ $ scBAMpler create-dictionary \
     - Path to the peak file in BED6 format.
 * `--out_file`
     - Path where the final dictionary will be saved (as a `.pickle` file).
+* `--verbose`
+    - Prints additional progress messages
 
 #### Output    
 * `<output_file>`  
     - A Python pickle file containing a dictionary of all cell barcodes, their mapping to peak and non-peak reads, and the necessary numeric encoders. (e.g. HEPG2_subset.pickle)
 * `<outfile>`.summary.txt
     - A plain-text file with summary statistics about the cell type.  (e.g. HEPG2_subset.summary.txt)
-* `<outfile>`.reads_in_peaks.bed.gz  *(optionally, deleted with --delete_intersect flag)*
+* `<outfile>`.reads_in_peaks.bed.gz
     - A gzipped BED-like file with two columns: cell barcode and associated peak-read QNAMEs.  
       *(Optionally deleted using the `--delete_intersect` flag.)*
     
 
+
+
 ### 3. Strategically Downsample BAM
-Next, specify what feature to downsample and the extent. If you request a number larger than the cell population allows, it will give an error. 
+Specify which feature to downsample and to what extent.  
+Maximum values are roughly outlined in the `.summary.txt` file generated in the previous step.  
+For FRiP, these limits are harder to estimate, but the program will give warning if the requested FRiP is considered too extreme.
 
 ```
 $ scBAMpler sampler \
-    --bam test_data/HEPG2_subset.bam \
-    --peak_file test_data/? \
-    --output_file test_data/HEPG2_subset.pickle \
+    --input_pickle example_output/HEPG2_subset.pickle \
+    --input_bam test_data/HEPG2_subset.bam \
+    --output_prefix example_output/HEPG2_subset_c500_s12 \
+    --downsample_by cells \
+    --downsample_to 500 \
+    --seed 12 \
+    --nproc 10 \
+    --output_fragment \
+    --verbose
+
+$ scBAMpler sampler \
+    --input_pickle example_output/HEPG2_subset.pickle \
+    --input_bam test_data/HEPG2_subset.bam \
+    --output_prefix example_output/HEPG2_subset_r1e6_s45 \
+    --downsample_by reads \
+    --downsample_to 1000000 \
+    --seed 45 \
+    --nproc 10 \
+    --output_fragment \
+    --verbose
+
+$ scBAMpler sampler \
+    --input_pickle example_output/HEPG2_subset.pickle \
+    --input_bam test_data/HEPG2_subset.bam \
+    --output_prefix example_output/HEPG2_subset_f0.2_s33 \
+    --downsample_by frip \
+    --downsample_to 0.2 \
+    --seed 33 \
+    --nproc 10 \
+    --output_fragment \
+    --verbose
 ```
 
-#### Input parameters  
-* --input_file
-    - info
-* --output_file
-    - info
-* --edit
-    - info
-* --value
-    - info
-* --seed
-    - info
-* --nproc
-    - info
-* --bam_file ??
-    - info
+#### Input Parameters
+* `--input_pickle`  
+    - Path to the pickle file generated in Step 2.
+* `--input_bam`  
+    - Path to the coordinate-sorted input BAM file. Reads will be directly extracted from this file.
+* `--output_prefix`  
+    - Prefix for all output files.
+* `--downsample_by`  
+    - Type of downsampling to perform.  
+      Choices: `"cells"`, `"reads"`, or `"frip"`.
+* `--downsample_to`  
+    - Target value for the downsampling operation.  
+      For `frip` value should be between 0 and 1 (e.g., 0.2) and this represents the pseudobulk-level FRiP (not average per-cell)
+* `--seed`  
+    - Random seed for reproducibility.
+* `--nproc`  
+    - Number of processors to use.
+* `--output_fragment`  
+    - If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file.
+* `--verbose`
+    - Prints additional progress messages
 
-#### Output 
+#### Output
+* `<output_prefix>.bam`  
+    - Downsampled, coordinate-sorted BAM file.
+* `<output_prefix>.frags.tsv.bgz` *(optional)*  
+    - Fragment file corresponding to the downsampled BAM file.
+* `<output_prefix>.summary.txt`  
+    - Summary file describing the edit information and resulting statistics.
+* `<output_prefix>.txt`  
+    - List of selected read names.  
+      Useful when storing a full BAM file is impractical. You can regenerate the BAM file later using this list:
 
+```    
+$ scBAMpler generateBAM \
+    --input_bam test_data/HEPG2_subset.bam \
+    --output_bam test_data/HEPG2_subset_c500_s12.bam \
+    --selected_reads test_data/HEPG2_subset_c500_s12.txt
+```
 
 ---------------
 
