@@ -1,7 +1,5 @@
 import argparse, sys
-from build_dict import main as main_BuildInput
-from perform_sampling import main as main_Sampling
-from generateBAM import main as  main_genBam
+from scBAMpler import build_dict, perform_sampling, downsampling_functions, generateBAM
 
 def main(argv=None):
 
@@ -82,10 +80,10 @@ def main(argv=None):
     args = parser.parse_args(cleaned_args)
         
     if args.command == "create-dictionary":
-        main_BuildInput(args)
+        build_dict.main(args)
         
     elif args.command == "sampler":
-        main_Sampling(args)
+        perform_sampling.main(args)
         
     elif args.command == "generateBAM":
         main_genBam(args)

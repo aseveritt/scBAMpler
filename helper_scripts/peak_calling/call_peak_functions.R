@@ -193,8 +193,10 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   # Make sure chromosome boundaries aren't invalidated
   chrom_lengths <- seqlengths(get(txdb))
   out_of_bounds <- gr_filt_resized[end(gr_filt_resized) > chrom_lengths[as.character(seqnames(gr_filt_resized))]]
-  if (length(out_of_bounds) > 0){print(paste("ERROR, regions out of bounds", out_of_bounds))}
-  
+  if (length(out_of_bounds) > 0){
+      print(paste("Warning, the following peak regions fell out of chromosomal bounds and were not included:", out_of_bounds))
+      gr_filt_resized <- gr_filt_resized[!gr_filt_resized %in% out_of_bounds]
+  }
   
   ########################
   # Remove regions overlapping blacklist regions

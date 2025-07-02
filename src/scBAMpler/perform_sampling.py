@@ -1,8 +1,8 @@
 #perform_sampling.py
 import os, pysam, time, pickle, shutil
-import downsampling_functions as dsfs
 from datetime import timedelta
-from downsampling_functions import Cells
+from scBAMpler import downsampling_functions as dsfs
+from scBAMpler.downsampling_functions import Cells
 
 def main(args):    
 

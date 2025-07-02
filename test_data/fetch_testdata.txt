@@ -1,1 +1,4 @@
 TBD
+
+#If you would like the full BAM file to begin:
+wget https://www.encodeproject.org/files/ENCFF089OZP/@@download/ENCFF089OZP.bam -O HEPG2_unfiltered.bam

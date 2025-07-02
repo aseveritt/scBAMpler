@@ -3,7 +3,7 @@
 <img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
-scBAMpler was developed to alter one aspect of a scATAC-seq dataset’s at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. For details, please see:
+scBAMpler was developed to alter one aspect of a scATAC-seq dataset at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. For details, please see:
 
 [Comparative evaluation of genomic footprinting algorithms for predicting transcription factor binding sites in single-cell data.](TBD)
 
@@ -15,9 +15,10 @@ Please clone the repository:
 
 Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
-    $ miniforge create -n scBAMpler_env python=3.10 numpy scipy pandas jupyter samtools bamTools macs3
-    $ pip install --editable .
-
+    $ conda create -n scBAMpler_env python=3.10 numpy scipy pandas samtools bedtools sinto -y
+    $ conda activate scBAMpler_env
+    # cd scBAMpler/
+    $ pip install .
 
 ---------------
 
@@ -43,15 +44,15 @@ If you would like to use the peak standardization code from our manuscript, we p
 
 ```
 $ bash helper_scripts/peak_calling/setup.sh
-# ~20 min
+# ~15 min if fresh-R environment
 
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
     --bam_file test_data/HEPG2_subset.bam \
     --outdir test_data/ \
     --peak_length 500 \
-    --cores 4
+    --cores 8
 
-# ~XX min on subset (2.8Gb), ~XX min on full set (XX)
+# ~6 min on subset (2.8Gb), ~35 min on full set (25Gb)
 ```
 
 #### Input Parameters
@@ -90,7 +91,7 @@ $ scBAMpler create-dictionary \
     --output_file example_output/HEPG2_subset.pickle \
     --verbose
 
-# ~10 min on subset (2.8Gb), ~XX min on full set (XX)
+# ~9 min on subset (2.8Gb), ~XX min on full set (25Gb)
 ```
    
 #### Input parameters  
@@ -153,6 +154,8 @@ $ scBAMpler sampler \
     --nproc 10 \
     --output_fragment \
     --verbose
+
+# ~4 min on subset (2.8Gb), ~XX min on full set (25Gb)
 ```
 
 #### Input Parameters
@@ -193,6 +196,8 @@ $ scBAMpler generateBAM \
     --input_bam test_data/HEPG2_subset.bam \
     --output_bam test_data/HEPG2_subset_c500_s12.bam \
     --selected_reads test_data/HEPG2_subset_c500_s12.txt
+
+# ~XX min on subset (2.8Gb), ~XX min on full set (XX)
 ```
 
 ---------------

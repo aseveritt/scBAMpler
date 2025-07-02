@@ -1,6 +1,6 @@
 #generateBAM.py
 import os, shutil
-import downsampling_functions as dsfs
+from scBAMpler import downsampling_functions as dsfs
 
 def main(args):    
 

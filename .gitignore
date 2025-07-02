@@ -211,3 +211,4 @@ test_data/*
 !test_data/fetch_testdata.txt
 example_output/*
 !example_output/fetch_exampleoutput.txt
+src/*.egg-info/

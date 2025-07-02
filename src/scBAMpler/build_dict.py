@@ -1,5 +1,5 @@
 import os, pysam, pickle, sys, shutil, subprocess
-import downsampling_functions as dsfs
+from scBAMpler import downsampling_functions as dsfs
 
 def main(args):     
 
@@ -36,7 +36,7 @@ def main(args):
     #Generate peak file if not provided
     if args.intersect_file is None:
         intersect_file = "%s.peaks.bed.gz" % os.path.splitext(args.output_file)[0]
-        if os.path.isfile(intersect_file): parser.error('The file "{}" exists! Cannot overwrite'.format(intersect_file))
+        if os.path.isfile(intersect_file): print(f'The file "{intersect_file}" exists! Cannot overwrite'); sys.exit(1)
         dsfs.IntersectPeaks(args.bam_file, args.peak_file, intersect_file)
     else:
         intersect_file = args.intersect_file
