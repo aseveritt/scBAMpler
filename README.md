@@ -91,7 +91,7 @@ $ scBAMpler create-dictionary \
     --output_file example_output/HEPG2_subset.pickle \
     --verbose
 
-# ~9 min on subset (2.8Gb), ~XX min on full set (25Gb)
+# ~9 min on subset (2.8Gb), ~50 min on full set (25Gb)
 ```
    
 #### Input parameters  
