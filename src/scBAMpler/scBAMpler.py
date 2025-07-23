@@ -49,7 +49,7 @@ def main(argv=None):
     parser_sampler.add_argument('--seed', 
                                 help='Random seed for reproducibility.', required=False, default=42, type=int)
     parser_sampler.add_argument('--nproc', 
-                                help='Number of processors to use.', required=True, type=int)
+                                help='Number of processors to use.', required=True, type=int, default=1)
     parser_sampler.add_argument('--output_fragment', 
                                 help='If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file. ', 
                                 required=False, action="store_true")
@@ -73,6 +73,9 @@ def main(argv=None):
     parser_justBAM.add_argument('--output_fragment', 
                             help='If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file. ', 
                             required=False, action="store_true")
+    parser_justBAM.add_argument('--nproc', 
+                                help='Number of processors to use.', required=True, type=int, default=1)
+
     parser_justBAM.add_argument('-v', '--verbose',
                                 help='Print update messages.', required=False, action="store_true")
 
@@ -86,7 +89,7 @@ def main(argv=None):
         perform_sampling.main(args)
         
     elif args.command == "generateBAM":
-        main_genBam(args)
+        generateBAM.main(args)
         
 
 if __name__ == "__main__":

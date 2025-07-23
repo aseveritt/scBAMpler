@@ -23,14 +23,18 @@ Then, create an environment with required dependencies. Installation and informa
 ---------------
 
 ## Download Test Data
+Data is available on [Zenodo](TBD)
 ```
 $ cd scBAMpler
-$ scp -R ### test_data/
-#roughly XXGb in size
+$ wget https://zenodo.org/records/XXXXX/files/test_data.tar.gz?download=1
+$ tar -xzvf test_data.tar.gz
+#2.94Gb in size
 
 # optionally, if you would like to see the example output directory without running the tutorial:
-$ scp -R ## ./example_output
-#roughly XXGb in size
+$ cd example_output/
+$ wget https://zenodo.org/records/XXXXX/files/example_output.tar.gz?download=1
+$ tar -xzvf example_output.tar.gz
+#1.68Gb in size 
 ```
 
 ---------------
@@ -155,7 +159,8 @@ $ scBAMpler sampler \
     --output_fragment \
     --verbose
 
-# ~4 min on subset (2.8Gb), ~XX min on full set (25Gb)
+# ~4 min on subset (2.8Gb), ~9 min on full set (25Gb)
+# time scales with amount of data retained (i.e., requesting 500 cells runs faster than 50000 cells)
 ```
 
 #### Input Parameters
@@ -194,10 +199,13 @@ $ scBAMpler sampler \
 ```    
 $ scBAMpler generateBAM \
     --input_bam test_data/HEPG2_subset.bam \
-    --output_bam test_data/HEPG2_subset_c500_s12.bam \
-    --selected_reads test_data/HEPG2_subset_c500_s12.txt
+    --output_bam example_output/HEPG2_subset_c500_s12_REMADE.bam \
+    --selected_reads example_output/HEPG2_subset_c500_s12.txt \
+    --nproc 5
 
-# ~XX min on subset (2.8Gb), ~XX min on full set (XX)
+$ diff <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view example_output/HEPG2_subset_c500_s12_REMADE.bam) #returns nothing
+
+# ~2 min on subset (2.8Gb), ~3 min on full set (25Gb)
 ```
 
 ---------------
@@ -215,9 +223,7 @@ $ scBAMpler generateBAM \
 
 If you use scBAMpler in your research, please cite it!
 
-- TBD
-
 ```
-@article
+@article{TBD}
 ```
 
