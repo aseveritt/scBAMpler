@@ -21,10 +21,6 @@ Then, create an environment with required dependencies. Installation and informa
     $ cd scBAMpler/
     $ pip install .
 
-> **Note:** `setuptools<81` is required because `sinto` imports `pkg_resources`, which was
-> removed in setuptools 81. Without the pin, `--output_fragment` fails and no fragment file
-> is produced.
-
 
 ---------------
 
@@ -57,8 +53,6 @@ If you would like to use the peak standardization code from our manuscript, we p
 
 ```
 $ bash helper_scripts/peak_calling/setup.sh
-
-# setup.sh builds a separate environment for peak calling; activate it before continuing
 $ conda activate macs_Renv
 
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
@@ -132,9 +126,7 @@ $ scBAMpler create-dictionary \
 
 
 ### 3. Strategically Downsample BAM
-Specify which feature to downsample and to what extent.  
-Maximum values are roughly outlined in the `.summary.txt` file generated in the previous step.  
-For FRiP, these limits are harder to estimate, but the program will give warning if the requested FRiP is considered too extreme.
+Here, we specify which feature to downsample and to what extent. The maximum values are roughly outlined in the `.summary.txt` file generated in the previous step. For FRiP, these limits are harder to estimate, but the program will give warning if the requested FRiP is considered too extreme.
 
 ```
 $ scBAMpler sampler \
@@ -206,7 +198,7 @@ $ scBAMpler sampler \
 
 
 ### 4. Recreate BAM from stored text file. 
-It is unlikely users will want to store the subset bams in long-terms storage. One option is to store the .txt files only long term and recreate the downsampled bam files directly if needed again in the future.   
+It is unlikely you will want to store the subset bams in long-terms storage. One option is to store the .txt files only and recreate the downsampled bam files directly if needed again in the future.   
 ```    
 $ scBAMpler generateBAM \
     --input_bam test_data/HEPG2_subset.bam \
@@ -216,12 +208,6 @@ $ scBAMpler generateBAM \
 
 $ cmp <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view example_output/HEPG2_subset_c500_s12_REMADE.bam) #returns nothing
 ```
-
-Note the comparison is on `samtools view` output rather than the BAM files themselves. The two
-files are not byte-identical: the `@PG` header records the command line used to create each one.
-Only the alignment records are expected to match, so an `md5sum` of the whole BAM will report a
-difference even when the recreation is correct. `cmp` is used instead of `diff` because it streams,
-whereas `diff` buffers both inputs and can exhaust memory on full-size data.
 
 ---------------
 
@@ -310,8 +296,6 @@ $ scBAMpler mix-pseudobulks \
     --cluster-size 50
 
 cat combos_all.csv combos_k562_hepg2.csv > combos_combined.csv
-
-# ~XX min on subset (2.8Gb), ~XX min on full set (25Gb)
 ```
 
 #### Input Parameters
@@ -364,9 +348,6 @@ $ scBAMpler select-populations \
     --output selected/ \
     --ref-labels K562 HEPG2 \\ ???? AMANDA
     --n-per-group 20
-
-
-# ~XX min on subset (2.8Gb), ~XX min on full set (25Gb)
 ```
 
 #### Input Parameters
