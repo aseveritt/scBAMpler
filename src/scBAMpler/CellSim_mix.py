@@ -65,9 +65,6 @@ Output
       label_dist_*              distance to each label's centroid (one col each)
       groups_sampled            value of --groups used to generate this row
 
-Dependencies
-------------
-    pip install pandas numpy scipy
 """
 
 import pickle
@@ -236,9 +233,11 @@ def parse_args():
         help="Random seed for reproducibility")
     return parser.parse_args()
 
+# ── MAIN ──────────────────────────────────────────────────────────────────────
 
-def main():
-    args = parse_args()
+
+def main(args):
+    #args = parse_args()
 
     # ── Load pickle ───────────────────────────────────────────────────────────
     print(f"Loading: {args.input}")
@@ -306,6 +305,3 @@ def main():
     print(f"Saved {len(combo_df)} combinations to: {args.output}")
     print("Done.")
 
-
-if __name__ == "__main__":
-    main()

@@ -210,6 +210,7 @@ $ diff <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view
 ### 1. Generate H5 input file
 First, generate an HDF5 file to store the single-cell ATAC-seq data: a sparse peak-by-cell accessibility matrix plus UMAP and tSNE embeddings. The helper script creates this from an ArchR project, but any file following the structure below will work.
 
+```text
 peakmat_input.h5
 ├── peak_matrix/
 │   ├── x          float64[]   Non-zero values of the sparse matrix
@@ -219,7 +220,8 @@ peakmat_input.h5
 └── embedding/
     ├── umap_df    table       UMAP coordinates per cell (see below) OR
     └── tsne_df    table       tSNE coordinates per cell (see below)
-    
+```
+
 Each embedding table has the form: (x coordinate, y coordinate, cell barcode, label-col)
 To generate using the helper script:
 
@@ -229,18 +231,18 @@ $ Rscript helper_scripts/makeH5.R
 ```
 
 ### 2. Make small, pseudobulks of identical size. 
-Next, we need to build pseudobulk profiles and collect summary information that will support the bottom-up approach for constructing mixed synthetic populations. 
+Next, we build pseudobulk profiles and collect summary information to support a bottom-up approach for constructing mixed synthetic populations.
+
+In this example, we cluster cells into groups of 50 within each CellLine. For real datasets, a larger cluster size (e.g., 500 cells) may be more appropriate. Although CellLine is used here to define groups, the workflow can be applied to any categorical variable.
 
 ```
 $ scBAMpler make-pseudobulks \
     --input test_data/peakmat_input.h5 \
-    --output example_output/medoids_s5000.pickle \
+    --output example_output/medoids_s50.pickle \
     --dimred umap \
     --label-col CellLine \
-    --cluster-size 500 \
+    --cluster-size 50 \
     --nproc 5
-
-# ~XX min on subset (2.8Gb), ~XX min on full set (25Gb)
 ```
                                
 #### Input Parameters
@@ -273,7 +275,7 @@ DESCRIPTION TEXT .
 ```
 #Sample 2000 combinations from all clusters
 $ scBAMpler mix-pseudobulks \
-    --input example_output/medoids.pickle \
+    --input example_output/medoids_s50.pickle \
     --output example_output/combos_all.csv \
     --groups all \
     --n-combos 2000 \
@@ -285,7 +287,7 @@ $ scBAMpler mix-pseudobulks \
     --output example_output/combos_k562_hepg2.csv \
     --groups K562 HEPG2 \
     --n-combos 1000 \
-    --cluster-size 500
+    --cluster-size 50
 
 cat combos_all.csv combos_k562_hepg2.csv > combos_combined.csv
 

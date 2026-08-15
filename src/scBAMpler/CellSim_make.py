@@ -23,10 +23,6 @@ Arguments
     --label-col     Name of the grouping column in the embedding (default: CellLine)
     --cluster-size  Target number of cells per pseudo-bulk cluster (default: 5000)
     --nproc         Number of parallel processes for clustering (default: 8)
-
-Dependencies
-------------
-    pip install h5py pandas numpy scipy k-means-constrained
 """
 
 import h5py
