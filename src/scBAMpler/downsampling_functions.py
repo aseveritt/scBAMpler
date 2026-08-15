@@ -86,9 +86,17 @@ def BuildCellDict(bam_file):
 @internal_timer
 def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600):
     #timeout in 6hrs. 
-
+    
     awk_statement = '{for (i=12; i<=NF; ++i) { if ($i ~ "^CB:Z:"){sub(/^CB:Z:/, "", $i); print $i, $1 }}}'
-    cmd = "set -o pipefail; bedtools intersect -abam %s -b %s -sorted -f 0.75 -ubam | samtools view -h - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
+    cmd = ("set -o pipefail; "
+       "bedtools intersect "
+       "-abam {bam} "
+       "-b <(bedtools sort -i {bed} -faidx <(samtools view -H {bam} | grep '^@SQ' | sed 's/.*SN://' | cut -f1)) "
+       "-sorted -f 0.75 -ubam | "
+       "samtools view -h - | awk '{awk}' | sort | uniq | gzip > {out}").format(
+    bam=bam_file, bed=peak_file, awk=awk_statement, out=intersect_file)
+    
+    #cmd = "set -o pipefail; bedtools intersect -abam %s -b %s -sorted -f 0.75 -ubam | samtools view -h - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
     try:
         subprocess.check_output(cmd, shell=True, executable='/bin/bash', stderr=subprocess.STDOUT, timeout=timeout)
     except subprocess.CalledProcessError as e:

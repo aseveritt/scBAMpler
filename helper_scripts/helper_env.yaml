@@ -1,0 +1,41 @@
+name: scBAMpler_R_env
+
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - python
+  - pip
+
+  # core
+  - r-base=4.5
+  - zlib
+  - macs3
+
+  - r-optparse
+  - r-dplyr
+  - r-stringr
+  - r-data.table
+  - r-ggrepel
+  - r-pals
+  - r-matrix
+  - r-devtools
+  - r-remotes
+
+  # Bioconductor
+  - bioconductor-genomicranges
+  - bioconductor-genomicfeatures
+  - bioconductor-rtracklayer
+  - bioconductor-annotationdbi
+  - bioconductor-rhdf5
+  - bioconductor-txdb.hsapiens.ucsc.hg38.knowngene
+  - bioconductor-chromvar 
+  - bioconductor-complexheatmap 
+  - bioconductor-motifmatchr 
+  - bioconductor-sparsematrixstats
+  - bioconductor-bsgenome.hsapiens.ucsc.hg38
+    
+  - pip:
+      - numpy

@@ -1,5 +1,5 @@
 import argparse, sys
-from scBAMpler import build_dict, perform_sampling, downsampling_functions, generateBAM
+from scBAMpler import build_dict, perform_sampling, downsampling_functions, generateBAM, CellSim_make, CellSim_mix, CellSim_select
 
 def main(argv=None):
 
@@ -79,6 +79,76 @@ def main(argv=None):
     parser_justBAM.add_argument('-v', '--verbose',
                                 help='Print update messages.', required=False, action="store_true")
 
+
+
+    # Subcommand: make-pseudobulks
+    parser_pseudo = subparsers.add_parser("make-pseudobulks", 
+                                           help="Generate pseudo-bulk ATAC-seq profiles by constrained k-means for future population mixing.")
+    parser_pseudo.add_argument("--input", 
+                               required=True, metavar="FILE",
+                               help="Path to input HDF5 file (peakmat_input.h5)")
+    parser_pseudo.add_argument("--output", 
+                               required=True, metavar="FILE", 
+                               help="Path for output pickle file (e.g. medoids_s5000.pickle)")
+    parser_pseudo.add_argument("--dimred", 
+                               default="umap", choices=["umap", "tsne"], 
+                               help="Embedding to use for clustering")
+    parser_pseudo.add_argument("--label-col", 
+                               default="CellLine", metavar="COL", 
+                               help="Name of the grouping column in the embedding (column 3 of the H5 embedding table)")
+    parser_pseudo.add_argument("--cluster-size", 
+                               type=int, default=500, metavar="N",
+                               help="Target number of cells per pseudo-bulk cluster")
+    parser_pseudo.add_argument("--nproc", 
+                               type=int, default=8, metavar="N",
+                               help="Number of parallel processes for clustering")
+
+    # Subcommand: mix-pseudobulks
+    parser_mix = subparsers.add_parser("mix-pseudobulks", 
+                                       help="Generate and score random pseudo-bulk combinations")
+    parser_mix.add_argument("--input", 
+                        required=True, metavar="FILE",
+                        help="Pickle file from make-pseudobulks")
+    parser_mix.add_argument("--output", 
+                        required=True, metavar="FILE",
+                        help="Output CSV file path")
+    parser_mix.add_argument("--groups", 
+                        nargs="+", default=["all"], metavar="LABEL",
+                        help="Labels to restrict cluster pool to (dominant label per cluster), "
+                        "or 'all' for unbiased sampling. E.g.: --groups K562 HEPG2")
+    parser_mix.add_argument("--n-combos", 
+                        type=int, default=2000, metavar="N",
+                        help="Number of random combinations to generate per ft-size")
+    parser_mix.add_argument("--cluster-size", 
+                        type=int, default=500, metavar="N",
+                        help="Cells per cluster (from make-pseudobulks), used to compute r=ft_size/cluster_size")
+    parser_mix.add_argument("--ft-sizes", 
+                        type=int, nargs="+", metavar="N", default=[500, 1000, 2000, 5000, 10000, 15000, 20000],
+                        help="Target footprint sizes in cells. One round of sampling per size.")
+    parser_mix.add_argument("--label-col", 
+                        default="CellLine", metavar="COL",
+                        help="Name of the grouping column in embedding_df")
+    parser_mix.add_argument("--nproc", 
+                        type=int, default=8, metavar="N",
+                        help="Number of parallel scoring processes")
+    parser_mix.add_argument("--seed", 
+                        type=int, default=42,
+                        help="Random seed for reproducibility")
+    
+
+    # Subcommand: select-populations
+    parser_select = subparsers.add_parser("select-populations", 
+                                       help="Generate and score random pseudo-bulk combinations")
+    parser_select.add_argument("--input", 
+                        required=True, metavar="FILE",
+                        help="CSV from gen-pseudobulk-combos")
+    parser_select.add_argument("--pickle", 
+                        required=True, metavar="FILE",
+                        help="Pickle file from make-pseudobulks (for barcode resolution)")
+    parser_select.add_argument("--output", 
+                        required=True, metavar="DIR",
+                        help="Output directory")
+    
     
     args = parser.parse_args(cleaned_args)
         
@@ -90,6 +160,17 @@ def main(argv=None):
         
     elif args.command == "generateBAM":
         generateBAM.main(args)
+        
+    elif args.command == "make-pseudobulks":
+        CellSim_make.main(args)
+        
+    elif args.command == "mix-pseudobulks":
+        CellSim_mix.main(args)
+        
+    elif args.command == "select-populations":
+        CellSim_select.main(args)
+        
+        
         
 
 if __name__ == "__main__":

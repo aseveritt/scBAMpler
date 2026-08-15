@@ -187,21 +187,25 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   
   ########################
   # Extend Summits
-  gr_filt_resized <- resize(gr_filt, width = peaklen, fix = "center")
-  
+  gr_filt_resized <- suppressWarnings(resize(gr_filt, width = peaklen, fix = "center"))
+
   ########################
   # Make sure chromosome boundaries aren't invalidated
-  chrom_lengths <- seqlengths(get(txdb))
-  out_of_bounds <- gr_filt_resized[end(gr_filt_resized) > chrom_lengths[as.character(seqnames(gr_filt_resized))]]
-  if (length(out_of_bounds) > 0){
-      print(paste("Warning, the following peak regions fell out of chromosomal bounds and were not included:", out_of_bounds))
-      gr_filt_resized <- gr_filt_resized[!gr_filt_resized %in% out_of_bounds]
+  seqlevels(gr_filt_resized) <- seqlevelsInUse(gr_filt_resized)
+  suppressWarnings(seqlengths(gr_filt_resized) <- seqlengths(get(txdb))[seqlevels(gr_filt_resized)])
+
+  out_of_bounds <- start(gr_filt_resized) < 1 | end(gr_filt_resized) > seqlengths(get(txdb))[as.character(seqnames(gr_filt_resized))]
+  if (any(out_of_bounds)){
+      print(paste("Warning: the following peak regions were removed for falling outside chromosome boundaries:", 
+                  paste(as.character(gr_filt_resized[out_of_bounds]), collapse=", ")))
+      gr_filt_resized <- gr_filt_resized[!out_of_bounds]
   }
+    
   
   ########################
   # Remove regions overlapping blacklist regions
   if (!is.null(exclusion_list)) { 
-      bl <- read.table(, sep="\t", header = FALSE, stringsAsFactors = FALSE)
+      bl <- read.table(exclusion_list, sep="\t", header = FALSE, stringsAsFactors = FALSE)
       bl_gr <- GRanges(
         seqnames = bl$V1,
         ranges = IRanges(start = bl$V2, end = bl$V3),
@@ -215,8 +219,9 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   ########################
   # Output them
   if (unique(width(gr_filt_resized)) != peaklen){print(paste("ERROR, regions not equal length", unique(width(gr_filt_resized))))}
+  gr_filt_resized <- sortSeqlevels(gr_filt_resized)
   gr_filt_resized = sort(gr_filt_resized) #you HAVE to sort it.
-  
+
   cl = gsub("_summits.bed", "", basename(summit_file))
   export(gr_filt_resized, paste0(out_dir, cl, "_standardized_", peaklen, "bp.bed"), format = "bed")
   

@@ -1,4 +1,4 @@
-BiocManager::install(version = "3.21", ask = FALSE)
+BiocManager::install(version = "3.23", ask = FALSE)
 
 BiocManager::install(c(
   "optparse",
