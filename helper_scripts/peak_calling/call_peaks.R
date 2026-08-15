@@ -35,14 +35,18 @@ parser <- add_option(parser, c("--union_outfile"), type="character", default="un
 
 opt <- parse_args(parser)
 
-#if (is.null(opt$out_dir)) { stop("ERROR: Missing --outdir argument.") }
-#if (is.null(opt$summit_file)) { if (is.null(opt$bam_file)) { stop("ERROR: Missing --bam argument.") }}
-#if (!is.null(opt$summit_file)) { if (is.null(opt$summit_file)){ stop("ERROR: Must add --summit_file argument if macs isnt being run.") }}
-                           
+if (is.null(opt$out_dir)) { stop("ERROR: Missing --outdir argument.") }
+if (is.null(opt$union_files) && is.null(opt$summit_file) && is.null(opt$bam_file)) {
+    stop("ERROR: Provide --bam_file (to run macs3), or --summit_file (to standardize an existing macs3 summit file).")
+}
+
 ################################################################################################
 
-
-source("helper_scripts/peak_calling/call_peak_functions.R")
+#resolve the helper path relative to this script, so call_peaks.R can be run from any directory
+script_args <- commandArgs(trailingOnly = FALSE)
+file_arg <- grep("^--file=", script_args, value = TRUE)
+script_dir <- if (length(file_arg) > 0) dirname(normalizePath(sub("^--file=", "", file_arg[1]))) else "."
+source(file.path(script_dir, "call_peak_functions.R"))
 
 
 if (!is.null(opt$union_files)) {
@@ -55,7 +59,7 @@ if (!is.null(opt$union_files)) {
     if (is.null(opt$summit_file)) { 
         prefix = gsub(".bam", "", basename(opt$bam_file)) 
         call_macs(opt$bam_file, opt$out_dir, prefix) 
-        opt$summit_file = paste0(opt$out_dir, prefix, "_summits.bed")
+        opt$summit_file = file.path(opt$out_dir, paste0(prefix, "_summits.bed"))
     } 
     standardize_summits(summit_file    = opt$summit_file, 
                         out_dir        = opt$out_dir, 

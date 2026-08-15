@@ -11,11 +11,11 @@ scBAMpler was developed to alter one aspect of a scATAC-seq dataset at a time: r
 
 Please clone the repository:
 
-    $ git clone git+https://github.com/aseveritt/scBAMpler.git
+    $ git clone https://github.com/aseveritt/scBAMpler.git
 
 Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
-    $ conda create -n scBAMpler_env python=3.10 numpy scipy pandas samtools bedtools sinto -y
+    $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto -y
     $ conda activate scBAMpler_env
     $ pip install h5py k-means-constrained #specific to cell similarity extension
     $ cd scBAMpler/
@@ -50,15 +50,12 @@ If you would like to use the peak standardization code from our manuscript, we p
 
 ```
 $ bash helper_scripts/peak_calling/setup.sh
-# ~15 min if fresh-R environment
 
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
     --bam_file test_data/HEPG2_subset.bam \
     --outdir test_data/ \
     --peak_length 500 \
     --cores 8
-
-# ~6 min on subset (2.8Gb), ~35 min on full set (25Gb)
 ```
 
 #### Input Parameters
@@ -158,7 +155,6 @@ $ scBAMpler sampler \
     --nproc 10 \
     --output_fragment \
     --verbose
-
 ```
 
 #### Input Parameters
@@ -205,8 +201,6 @@ $ scBAMpler generateBAM \
     --nproc 5
 
 $ diff <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view example_output/HEPG2_subset_c500_s12_REMADE.bam) #returns nothing
-
-# ~2 min on subset (2.8Gb), ~3 min on full set (25Gb)
 ```
 
 ---------------
@@ -280,10 +274,10 @@ DESCRIPTION TEXT .
 #Sample 2000 combinations from all clusters
 $ scBAMpler mix-pseudobulks \
     --input example_output/medoids.pickle \
-    --output example_output/combos_all.csv \ 
+    --output example_output/combos_all.csv \
     --groups all \
     --n-combos 2000 \
-    --cluster-size 500
+    --cluster-size 50
 
 #Sample 1000 combinations from K562 and HEPG2 dominated clusters
 $ scBAMpler mix-pseudobulks \

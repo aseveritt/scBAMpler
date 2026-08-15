@@ -33,8 +33,11 @@ call_macs <- function(bam_file, out_dir, prefix){
   macs_call <- sprintf(paste(template, collapse = " "),
                        prefix, bam_file, out_dir)
   
-  output <- system(macs_call, intern = TRUE)
-  
+  status <- system(macs_call)
+  if (status != 0){
+    stop(sprintf("macs3 callpeak failed with exit status %s. Is macs3 on your PATH?", status))
+  }
+
 }
 
 ################################################################################################
@@ -70,7 +73,7 @@ cleanHitsObject <- function(gr, hits_df){
 
 
 getuniquePeaks <- function(gr, hits_df_cleaned){
-  allidx = 1:length(gr)
+  allidx = seq_along(gr) #seq_along, not 1:length(), which returns c(1,0) when gr is empty
   overlapped_somewhere <- unique(c(hits_df_cleaned$subjectHits, hits_df_cleaned$queryHits))
   unique_peaks = allidx[allidx %ni% overlapped_somewhere]
   return(unique_peaks)
@@ -82,7 +85,9 @@ iterativeOverlap <- function(hits_df_cleaned, quiet=FALSE){
   
   # Filter to only relevant rows and rank
   dt <- as.data.table(hits_df_cleaned)
-  dt <- dt[maxFreq > 1][, rank := frank(-maxScore, ties.method = "random")]
+  #ties.method="first" so the peak set is reproducible run-to-run. "random" broke ties
+  #with each mclapply worker's own RNG state, so the same BAM could yield different peaks.
+  dt <- dt[maxFreq > 1][, rank := frank(-maxScore, ties.method = "first")]
   setorder(dt, rank)
   if (! quiet) { message(sprintf("%s peaks overlap > 2 regions", n_distinct(c(dt$queryHits, dt$subjectHits))))}
   
@@ -135,7 +140,7 @@ wrapper_for_per_chromosome <- function(gr, maxgap){
 checkfinalhits <- function(gr){
   hits_df <- as.data.frame(findOverlaps(gr, gr, ignore.strand = TRUE, select="all"))
   non_self_hits <- hits_df[hits_df$queryHits != hits_df$subjectHits, ]
-  if (nrow(non_self_hits) > 0){print(paste("ERROR, there were overlapping regions at the final step -- you should evaluate how and why that happened before proceeding."))}
+  if (nrow(non_self_hits) > 0){warning("There were overlapping regions at the final step -- you should evaluate how and why that happened before proceeding.", immediate. = TRUE)}
 }
 
 
@@ -163,7 +168,7 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
     score = summits$V5,
     name = gsub(prefix, "", summits$V4)
   )
-  gr$idx = 1:length(gr)
+  gr$idx = seq_along(gr)
     
   ########################
   data_chunks <- as.list(split(gr, seqnames(gr)))
@@ -213,17 +218,30 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
       )
   
       toremove <- data.frame(findOverlaps(gr_filt_resized, bl_gr, ignore.strand = TRUE, minoverlap = 150))
-      gr_filt_resized = gr_filt_resized[-unique(toremove$queryHits)] #remove bl regions
+      drop_idx <- unique(toremove$queryHits)
+
+      #guard the empty case: x[-integer(0)] returns nothing rather than everything,
+      #so an unguarded subset would drop every peak when none hit the exclusion list.
+      if (length(drop_idx) > 0){
+          gr_filt_resized = gr_filt_resized[-drop_idx] #remove bl regions
+      }
+      message(sprintf("%s peaks removed for overlapping the exclusion list", length(drop_idx)))
   }
   
   ########################
   # Output them
-  if (unique(width(gr_filt_resized)) != peaklen){print(paste("ERROR, regions not equal length", unique(width(gr_filt_resized))))}
+  if (length(gr_filt_resized) == 0){stop("No peaks remain after filtering -- nothing to export.")}
+
+  #any(), not unique(): a length>1 condition in if() is an error in R >= 4.2, so the
+  #original check crashed in exactly the case it was written to report.
+  if (any(width(gr_filt_resized) != peaklen)){
+      warning(paste("Regions not equal length:", paste(unique(width(gr_filt_resized)), collapse = ", ")), immediate. = TRUE)
+  }
   gr_filt_resized <- sortSeqlevels(gr_filt_resized)
   gr_filt_resized = sort(gr_filt_resized) #you HAVE to sort it.
 
   cl = gsub("_summits.bed", "", basename(summit_file))
-  export(gr_filt_resized, paste0(out_dir, cl, "_standardized_", peaklen, "bp.bed"), format = "bed")
+  export(gr_filt_resized, file.path(out_dir, paste0(cl, "_standardized_", peaklen, "bp.bed")), format = "bed")
   
 }
 
@@ -234,16 +252,18 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
 ################################################################################################
 
 
-make_union <- function(infiles, outdir, outfile, ncores=opt$ncores){
+make_union <- function(infiles, outdir, outfile, ncores=1){
   
   ########################
   #Read in and concatenate all peaks
   allpeaks = data.frame()
   
   for (peak_file in infiles){
-    f1 <- read.table(paste0(outdir, peak_file), header = FALSE, stringsAsFactors = FALSE)
+    #accept either a full path or a filename relative to outdir
+    infile <- if (file.exists(peak_file)) peak_file else file.path(outdir, peak_file)
+    f1 <- read.table(infile, header = FALSE, stringsAsFactors = FALSE)
     f1$norm_score = (f1$V5 / sum(f1$V5))*1e6 #normalize scores: I'm sure there are better ways of doing this, but this will work for our purposes
-    f1$cell_line = str_split(peak_file, "_")[[1]][1]
+    f1$cell_line = str_split(basename(peak_file), "_")[[1]][1]
     allpeaks <- rbind(allpeaks, f1)
   }
   
@@ -257,7 +277,7 @@ make_union <- function(infiles, outdir, outfile, ncores=opt$ncores){
     origin_score = allpeaks$V5,
     origin = allpeaks$cell_line
   )
-  gr$idx = 1:length(gr)
+  gr$idx = seq_along(gr)
     
   ########################
   data_chunks <- as.list(split(gr, seqnames(gr)))
@@ -279,7 +299,7 @@ make_union <- function(infiles, outdir, outfile, ncores=opt$ncores){
   final_gr = gr[union_peaks]
   checkfinalhits(final_gr)
   final_gr = sort(final_gr) 
-  export(final_gr, paste0(outdir, outfile), format = "bed")
+  export(final_gr, file.path(outdir, outfile), format = "bed")
   
 }
 

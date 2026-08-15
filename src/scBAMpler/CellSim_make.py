@@ -34,6 +34,7 @@ import pickle
 import time
 import functools
 import argparse
+import warnings
 
 import pandas as pd
 import numpy as np
@@ -128,7 +129,15 @@ def _cluster_one_cellline(df, cluster_size, seed, cellline):
     X = df[["embedding1", "embedding2"]].to_numpy()
 
     if len(X) < cluster_size:
-        return None
+        warnings.warn(
+            f"Skipping clustering for group '{cellline}': "
+            f"only {len(X)} cells are available, which is fewer than the "
+            f"requested cluster size of {cluster_size}. "
+            f"All cells in this group will be marked as unassigned (Cluster = -1)."
+        )
+        df = df.copy()
+        df["Cluster"] = -1
+        return df
 
     # Constrained k-means clustering
     kmeans = KMeansConstrained(
