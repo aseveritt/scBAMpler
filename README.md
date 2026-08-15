@@ -1,6 +1,6 @@
 
 <p align ="center">
-<img src='https://github.com/aseveritt/scBAMpler/blob/main/docs/scBAMpler.png' style="max-width: 100%; height: auto;">
+<img src='docs/scBAMpler.png' style="max-width: 100%; height: auto;">
 </p>
 
 scBAMpler was developed to alter one aspect of a scATAC-seq dataset at a time: read count, cell count, and fraction of reads in peaks (FRiP) while preserving the original cell attributes. An extension was further developed which, using multiple cell types, will alter the cell-to-cell homogeneity of a population. For details, please see:
@@ -15,11 +15,15 @@ Please clone the repository:
 
 Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
-    $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto -y
+    $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto "setuptools<81" -y
     $ conda activate scBAMpler_env
     $ pip install h5py k-means-constrained #specific to cell similarity extension
     $ cd scBAMpler/
     $ pip install .
+
+> **Note:** `setuptools<81` is required because `sinto` imports `pkg_resources`, which was
+> removed in setuptools 81. Without the pin, `--output_fragment` fails and no fragment file
+> is produced.
 
 
 ---------------
@@ -31,6 +35,9 @@ $ cd scBAMpler
 $ wget https://zenodo.org/records/XXXXX/files/test_data.tar.gz?download=1
 $ tar -xzvf test_data.tar.gz
 #2.94Gb in size
+
+# every tutorial command below writes into this directory:
+$ mkdir -p example_output
 
 # optionally, if you would like to see the example output directory without running the tutorial:
 $ cd example_output/
@@ -50,6 +57,9 @@ If you would like to use the peak standardization code from our manuscript, we p
 
 ```
 $ bash helper_scripts/peak_calling/setup.sh
+
+# setup.sh builds a separate environment for peak calling; activate it before continuing
+$ conda activate macs_Renv
 
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
     --bam_file test_data/HEPG2_subset.bam \
@@ -85,23 +95,27 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
 
 ### 2. Build Cell Type Input Dictionaries
 Next, build a dictionary for each cell type you want to downsample.  
-We assume the BAM file contains a cell barcode tag in the form `CB:Z:*` and botht the bam and peak file are coordinate sorted. 
+We assume the BAM file contains a cell barcode tag in the form `CB:Z:*` and both the bam and peak file are coordinate sorted. 
 
 ```
 $ scBAMpler create-dictionary \
-    --bam test_data/HEPG2_subset.bam \
+    --bam_file test_data/HEPG2_subset.bam \
     --peak_file test_data/HEPG2_subset_standardized_500bp.bed \
     --output_file example_output/HEPG2_subset.pickle \
     --verbose
 ```
    
 #### Input parameters  
-* `--bam`
+* `--bam_file`
     - Path to the coordinate-sorted input BAM file.
 * `--peak_file`
     - Path to the peak file in BED6 format.
-* `--out_file`
+* `--output_file`
     - Path where the final dictionary will be saved (as a `.pickle` file).
+* `--intersect_file` *(optional)*
+    - Reuse an existing cell-barcode:peak-read mapping (`*.peaks.bed.gz`) and skip the bedtools intersect step.
+* `--delete_intersect` *(optional)*
+    - Delete the intersect file after building the dictionary.
 * `--verbose`
     - Prints additional progress messages
 
@@ -110,8 +124,8 @@ $ scBAMpler create-dictionary \
     - A Python pickle file containing a dictionary of all cell barcodes, their mapping to peak and non-peak reads, and the necessary numeric encoders. (e.g. HEPG2_subset.pickle)
 * `<outfile>`.summary.txt
     - A plain-text file with summary statistics about the cell type.  (e.g. HEPG2_subset.summary.txt)
-* `<outfile>`.reads_in_peaks.bed.gz
-    - A gzipped BED-like file with two columns: cell barcode and associated peak-read QNAMEs.  
+* `<outfile>`.peaks.bed.gz
+    - A gzipped BED-like file with two columns: cell barcode and associated peak-read QNAMEs.  (e.g. HEPG2_subset.peaks.bed.gz)
       *(Optionally deleted using the `--delete_intersect` flag.)*
     
 
@@ -175,7 +189,7 @@ $ scBAMpler sampler \
 * `--nproc`  
     - Number of processors to use.
 * `--output_fragment`  
-    - If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file.
+    - If set, will also output a `.frags.tsv.bgz` file in addition to the BAM file. Requires `sinto`.
 * `--verbose`
     - Prints additional progress messages
 
@@ -200,8 +214,14 @@ $ scBAMpler generateBAM \
     --selected_reads example_output/HEPG2_subset_c500_s12.txt \
     --nproc 5
 
-$ diff <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view example_output/HEPG2_subset_c500_s12_REMADE.bam) #returns nothing
+$ cmp <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view example_output/HEPG2_subset_c500_s12_REMADE.bam) #returns nothing
 ```
+
+Note the comparison is on `samtools view` output rather than the BAM files themselves. The two
+files are not byte-identical: the `@PG` header records the command line used to create each one.
+Only the alignment records are expected to match, so an `md5sum` of the whole BAM will report a
+difference even when the recreation is correct. `cmp` is used instead of `diff` because it streams,
+whereas `diff` buffers both inputs and can exhaust memory on full-size data.
 
 ---------------
 
@@ -226,7 +246,7 @@ Each embedding table has the form: (x coordinate, y coordinate, cell barcode, la
 To generate using the helper script:
 
 ```
-$ Rscript helper_scripts/makeH5.R
+$ Rscript helper_scripts/MakeH5.R
 
 ```
 

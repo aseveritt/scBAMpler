@@ -1,4 +1,4 @@
-import argparse, sys
+import argparse, sys, shlex
 from scBAMpler import build_dict, perform_sampling, downsampling_functions, generateBAM, CellSim_make, CellSim_mix, CellSim_select
 
 def main(argv=None):
@@ -42,8 +42,8 @@ def main(argv=None):
     parser_sampler.add_argument('-o', '--output_prefix', 
                                 help='Prefix for all output files.', required=True, type=str)
     parser_sampler.add_argument('--downsample_by', dest="edit",
-                                help='Type of downsampling to perform.', required=True, type=str, 
-                                choices=["cells", "reads", "frip", "peakreads"])
+                                help='Type of downsampling to perform.', required=True, type=str,
+                                choices=["cells", "reads", "frip"]) #"peakreads" is not implemented in perform_sampling; re-add here when it is
     parser_sampler.add_argument('--downsample_to', dest="value",
                                 help='Target value for the downsampling operation. ', required=True, type=float)
     parser_sampler.add_argument('--seed', 

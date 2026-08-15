@@ -36,20 +36,27 @@ class Cells(object):
         self.nonpeakcount = 0
 
 @internal_timer
-def BuildCellDict(bam_file):
-    
+def BuildCellDict(bam_file, verbose=True):
+
     #read in bam file using pysam
     cb_dict = {}
     cb_encoder = {}
     qname_encoder = {}
     c = 0
     q = 0
+    no_cb = 0
     curr_bam = pysam.AlignmentFile(bam_file, 'rb')
-    
+
     #for read in tqdm(curr_bam, desc="Progress adding cell barcodes", total=curr_bam.mapped):
     for read in curr_bam:
-        if not read.is_read1: continue    #we only want read pairs, so select only the first read. 
-        
+        if not read.is_read1: continue    #we only want read pairs, so select only the first read.
+
+        #not every alignment is guaranteed to carry a barcode, so tally and skip these
+        #rather than raising a KeyError partway through the file.
+        if not read.has_tag("CB"):
+            no_cb += 1
+            continue
+
         cb = read.get_tag("CB")
         qname = read.query_name #in new files
 
@@ -72,7 +79,15 @@ def BuildCellDict(bam_file):
         #purposely using a set here so the reads aren't redundant
         
 
-    #when all reads are done, quickly go back and add a tally of how many read-pairs per cell there are. 
+    if no_cb > 0 and verbose:
+        print(f"--- Skipped {no_cb} read1 alignments with no CB tag")
+
+    if not cb_dict:
+        print(f"ERROR: No reads with a CB tag were found in '{bam_file}'. "
+              "scBAMpler expects cell barcodes in the CB:Z: tag.")
+        sys.exit(1)
+
+    #when all reads are done, quickly go back and add a tally of how many read-pairs per cell there are.
     for item in cb_dict.keys():
         cb_dict[item].readslist = list(cb_dict[item].readslist) #new
         a = len(cb_dict[item].readslist)
@@ -84,7 +99,7 @@ def BuildCellDict(bam_file):
 #################################################
 
 @internal_timer
-def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600):
+def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600, verbose=True):
     #timeout in 6hrs. 
     
     awk_statement = '{for (i=12; i<=NF; ++i) { if ($i ~ "^CB:Z:"){sub(/^CB:Z:/, "", $i); print $i, $1 }}}'
@@ -97,34 +112,49 @@ def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600):
     bam=bam_file, bed=peak_file, awk=awk_statement, out=intersect_file)
     
     #cmd = "set -o pipefail; bedtools intersect -abam %s -b %s -sorted -f 0.75 -ubam | samtools view -h - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
+    #exit on failure rather than returning: downstream steps would otherwise read an
+    #empty intersect file and fail with a confusing pandas error instead of this one.
     try:
         subprocess.check_output(cmd, shell=True, executable='/bin/bash', stderr=subprocess.STDOUT, timeout=timeout)
     except subprocess.CalledProcessError as e:
         stderr_output = e.output  # This contains the stderr output
         print("ERROR: Bedtools command failed. stderr:", stderr_output.decode())
+        sys.exit(1)
     except Exception as e:
         print("ERROR: An error occurred:", str(e))
-    
+        sys.exit(1)
+
     return
 
     
 @internal_timer
-def AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, delete):
+def AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, delete, verbose=True):
     rip_df  = pd.read_csv(intersect_file, compression='gzip', header=None, sep=' ', names=["cb", "qname"])
-    
-    def custom_function(group): 
+
+    unmatched = []
+
+    def custom_function(group):
         l = []
         for i in group['qname']:
             try:
                 l.append(qname_encoder[i])
-            except:
+            except KeyError:
                 l.append(None)
-                print(f"An exception occurred adding read: {i} to dictionary: possible unmapped R2")
+                #collect rather than print per-read: on a full-size BAM this can be
+                #millions of lines of output.
+                unmatched.append(i)
         return(l)
-    
-    grouped_results = rip_df.groupby('cb').apply(custom_function)
+
+    #select the column explicitly after groupby: the grouping column is excluded from
+    #apply() in pandas 3, and being explicit here silences that FutureWarning without
+    #changing behaviour, since custom_function only ever reads 'qname'.
+    grouped_results = rip_df.groupby('cb')[['qname']].apply(custom_function)
     grouped_results_filt = grouped_results.dropna()
     q_dict = grouped_results_filt.to_dict()
+
+    if unmatched and verbose:
+        print(f"--- {len(unmatched)} peak reads had no matching read1 in the BAM "
+              f"(possible unmapped R2), e.g. {unmatched[0]}")
 
     for curr_cb in q_dict.keys(): #for all cb we need to update
         curr_cb_int = cb_encoder[curr_cb]
@@ -272,8 +302,8 @@ def ChooseCells(cb_dict, N, sample_case, seed, weighted=True):
     return
 
 
-def ResetEdits():
-    #reset the number of edits to use the original object. 
+def ResetEdits(cb_dict):
+    #reset the number of edits to use the original object.
     #just for testing + debugging.
     for el in cb_dict: cb_dict[el].n_edits = 0
     return
@@ -302,7 +332,7 @@ def RemoveReads(cell_object, seed, sample_case):
             idx_rem = np.random.choice(idx_select_from, size=cell_object.n_edits, replace=False)
     
     #update cell_object in place so the dictionary is accurate. 
-    idx_keep = idx_range[~np.in1d(idx_range,idx_rem)]
+    idx_keep = idx_range[~np.isin(idx_range,idx_rem)] #np.in1d is deprecated in numpy 2.x
     cell_object.readslist = np.array(cell_object.readslist)[idx_keep]
     cell_object.peaklist = cell_object.peaklist[idx_keep]
     cell_object.readcount = len(cell_object.readslist)
@@ -451,13 +481,18 @@ def DownsampleFRIP(cb_dict, frip, seed, verbose):
 
 
 def _submit_cmd(cmd, err = "ERROR"):
+    #returns 0 on success, non-zero otherwise, so callers can stop rather than
+    #running later steps against output an earlier step never produced.
     try:
         subprocess.check_output(f"set -o pipefail; {cmd}", shell=True, executable='/bin/bash', stderr=subprocess.STDOUT)
+        return 0
     except subprocess.CalledProcessError as e:
         stderr_output = e.output  # This contains the stderr output
         print(err, stderr_output.decode())
+        return e.returncode if e.returncode != 0 else 1
     except Exception as e:
         print(err, str(e))
+        return 1
 
 
 
@@ -465,11 +500,11 @@ def _submit_cmd(cmd, err = "ERROR"):
 def GenerateOutputBam(input_bam, read_file, nproc, output_file, verbose):
         
     cmd = 'samtools view -N %s -o %s %s -@ %s' % (read_file, output_file, input_bam, str(nproc))
-    _submit_cmd(cmd, "ERROR: in generate output bam")
-    
+    status = _submit_cmd(cmd, "ERROR: in generate output bam")
+    if status != 0: return status
+
     cmd2 = 'samtools index %s' % output_file
-    _submit_cmd(cmd2, "ERROR: in indexing output bam")
-    return 0
+    return _submit_cmd(cmd2, "ERROR: in indexing output bam")
 
     
 @internal_timer   
@@ -497,24 +532,36 @@ def GenerateOutputBam_DEFUNCT(input_type, bam_file, input_file, nproc, output_di
 @internal_timer
 def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):    
     tmp_output = output_fragment + "_tmp"
-    sample_name = os.path.splitext(os.path.basename(output_fragment))[0]
-    
+
+    #strip the whole suffix, not just the last extension: splitext only removes '.bgz',
+    #which left '.frags.tsv' embedded in every cell name in the fragment file.
+    #note we cannot split on '.' here -- prefixes legitimately contain them (e.g. f0.2_s33).
+    sample_name = os.path.basename(output_fragment)
+    for suffix in (".frags.tsv.bgz", ".frags.tsv", ".tsv.bgz", ".bgz"):
+        if sample_name.endswith(suffix):
+            sample_name = sample_name[:-len(suffix)]
+            break
+
     cmd1 = "sinto fragments --collapse_within -p %s -b %s -f %s > /dev/null" % (nproc, input_bam, tmp_output)
-    _submit_cmd(cmd1, "ERROR: in sinto fragment creation (step 1)")
-    
-    #pound and dash do not work btw for archr. 
+    status = _submit_cmd(cmd1, "ERROR: in sinto fragment creation (step 1)")
+    if status != 0:
+        #bail out here: without the tmp file, steps 2 and 4 can only fail too, and
+        #reporting three errors for one root cause makes the real problem harder to see.
+        print("ERROR: skipping remaining fragment steps. No fragment file was produced.")
+        return status
+
+    #pound and dash do not work btw for archr.
     awk_part = '{print $1, $2, $3, "%s:"$4, $5}' % sample_name
     cmd2 = fr"bedtools sort -i {tmp_output} | awk '{awk_part}' | tr ' ' '\t' | bgzip -c > {output_fragment}"
-    _submit_cmd(cmd2, "ERROR: bedtools bgzipped (step 2)")
-    
+    status = _submit_cmd(cmd2, "ERROR: bedtools bgzipped (step 2)")
+    if status != 0: return status
+
     #cmd3 = f"tabix {outfile}"
     #_submit_cmd(cmd3, "ERROR: in indexing bgzipped (step 3)")
-    
+
     cmd4 = f"rm {tmp_output}"
-    _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
-    
-    return
-    
+    return _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
+
 
 def GenerateOuputFragment_DEFUNCT(input_bam, output_fragment, nproc):
 

@@ -6,8 +6,10 @@ def main(args):
     ########################
     #USER CHECKS
     def validateFile(arg):
-        if not os.path.isfile(arg): print(f'ERROR: The file "{arg}" does not exist!')
-        else: return 
+        if not os.path.isfile(arg):
+            print(f'ERROR: The file "{arg}" does not exist!')
+            sys.exit(1)
+        return
 
     def validateBAM(bam_path):
         try:
@@ -37,17 +39,17 @@ def main(args):
     if args.intersect_file is None:
         intersect_file = "%s.peaks.bed.gz" % os.path.splitext(args.output_file)[0]
         if os.path.isfile(intersect_file): print(f'The file "{intersect_file}" exists! Cannot overwrite'); sys.exit(1)
-        dsfs.IntersectPeaks(args.bam_file, args.peak_file, intersect_file)
+        dsfs.IntersectPeaks(args.bam_file, args.peak_file, intersect_file, verbose=args.verbose)
     else:
         intersect_file = args.intersect_file
 
     ########################
     #make dictionary of Cells Objects
-    cb_dict, cb_encoder, qname_encoder = dsfs.BuildCellDict(args.bam_file)
+    cb_dict, cb_encoder, qname_encoder = dsfs.BuildCellDict(args.bam_file, verbose=args.verbose)
 
     ########################
     #Add peak information to dictionary
-    dsfs.AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, args.delete_intersect)
+    dsfs.AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, args.delete_intersect, verbose=args.verbose)
 
     ########################
     #Output dictionary as pickle which can be read in for downsampling. 

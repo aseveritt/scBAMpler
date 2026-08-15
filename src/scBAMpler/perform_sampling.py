@@ -1,5 +1,5 @@
 #perform_sampling.py
-import os, pysam, time, pickle, shutil
+import os, pysam, time, pickle, shutil, sys
 from datetime import timedelta
 from scBAMpler import downsampling_functions as dsfs
 from scBAMpler.downsampling_functions import Cells
@@ -9,19 +9,22 @@ def main(args):
     ########################
     #USER CHECKS
     def validateFile(arg):
-        if not os.path.isfile(arg): print(f'ERROR: The file "{arg}" does not exist!')
-        else: return 
+        if not os.path.isfile(arg):
+            print(f'ERROR: The file "{arg}" does not exist!')
+            sys.exit(1)
+        return
     def validateTools(tool_name):
         if shutil.which(tool_name) is None:
             print(f"ERROR: Required tool '{tool_name}' not found in PATH.")
             sys.exit(1)
 
     validateFile(args.input_pickle)
+    validateFile(args.input_bam)
     validateTools("samtools"); validateTools("bedtools")
-    
+
     out_dir, _ = os.path.split(args.output_prefix)
     if out_dir == "": out_dir = "."
-    if not os.path.exists(out_dir): os.mkdir(out_dir)
+    os.makedirs(out_dir, exist_ok=True) #makedirs so nested output paths work
     
     ########################
     start_time = time.time()
@@ -57,10 +60,16 @@ def main(args):
 
     output_bam = args.output_prefix+".bam"
     returncode = dsfs.GenerateOutputBam(args.input_bam, read_file, args.nproc, output_bam, verbose=args.verbose)
-    
-    if (returncode == 0 and args.output_fragment == True):
+    if returncode != 0:
+        print(f"ERROR: failed to write '{output_bam}'.")
+        sys.exit(1)
+
+    if args.output_fragment:
         validateTools("sinto")
-        dsfs.GenerateOuputFragment(output_bam, args.output_prefix+".frags.tsv.bgz", args.nproc, verbose=args.verbose)
+        frag_status = dsfs.GenerateOuputFragment(output_bam, args.output_prefix+".frags.tsv.bgz", args.nproc, verbose=args.verbose)
+        if frag_status != 0:
+            print(f"ERROR: failed to write '{args.output_prefix}.frags.tsv.bgz'.")
+            sys.exit(1)
 
     
 if __name__ == '__main__':
