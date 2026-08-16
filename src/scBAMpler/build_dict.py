@@ -27,6 +27,11 @@ def main(args):
     validateFile(args.peak_file)
     if args.intersect_file is not None: validateFile(args.intersect_file)
     validateTools("samtools"); validateTools("bedtools")
+
+    #create the output directory if it doesn't exist, so steps can be run out of order.
+    #must happen before IntersectPeaks, which also writes next to output_file.
+    out_dir = os.path.dirname(args.output_file)
+    if out_dir: os.makedirs(out_dir, exist_ok=True)
     
     #Check if bam index exists. 
     if not os.path.exists("%s.bai" % args.bam_file): 

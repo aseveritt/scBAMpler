@@ -33,46 +33,17 @@ regenerate an input.
 | File | Needed for | Description |
 |---|---|---|
 | `HEPG2_subset.bam` | Data Quality Usage, all steps | Subset of an ENCODE HepG2 scATAC-seq experiment, coordinate sorted. |
-| `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, blacklist filtered. |
-| `hg38-blacklist.v2.bed` | Data Quality Usage, step 1 *(optional)* | ENCODE exclusion list used when calling the peaks distributed here. |
+| `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, blacklist filtered. See docs/build_testdata.sh |
 | `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined (1,111 cells passing ArchR QC). ~15MB. |
 | `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. Defines the row order of the peak matrix. |
 | `K562_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE K562 experiment. |
 | `MCF7_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE MCF-7 experiment. |
 
-Three common cases:
 
 * **Data Quality Usage only** — `HEPG2_subset.bam` and `HEPG2_subset_standardized_500bp.bed`.
 * **Exploring the extension** — `peakmat_input.h5` alone is enough to run steps 2 through 4.
 * **Extension end-to-end**, including extracting a mixed-cell-line BAM — all three BAMs, since that
   step needs reads from every cell line.
-
-```
-$ cd scBAMpler
-$ mkdir -p test_data example_output   # every tutorial command reads from the first and writes to the second
-
-# fetch what you need, e.g. for the Data Quality Usage section:
-$ cd test_data
-$ for F in HEPG2_subset.bam HEPG2_subset_standardized_500bp.bed; do
-      wget -c "https://zenodo.org/records/XXXXX/files/${F}?download=1" -O "$F"
-  done
-$ cd ..
-```
-
-BAM indexes are not distributed. Build them for whichever BAMs you downloaded:
-
-```
-$ samtools index test_data/HEPG2_subset.bam
-```
-
-(`create-dictionary` will index a BAM for you if the `.bai` is missing, but the R helper scripts and
-ArchR expect it to already exist.)
-
-Each file's MD5 checksum is listed in the Zenodo record if you want to verify a download.
-
-`peakmat_input.h5` is provided directly so the extension is runnable without installing R or ArchR.
-See [Appendix: building the H5 from an ArchR project](#appendix-building-the-h5-from-an-archr-project)
-if you want to regenerate it or build one from your own data.
 
 ---------------
 
@@ -313,8 +284,11 @@ $ scBAMpler make-pseudobulks \
     - Name of the grouping column in the embedding (column 3 of the H5 embedding table)
 * `--cluster-size`  
     - Target number of cells per pseudo-bulk cluster (default 500 cells)
+    - Groups with fewer cells than this are left unclustered; the run warns and reports how many cells were affected.
 * `--nproc`  
     - Number of parallel processes for clustering. 
+* `--seed`  
+    - Random seed for the constrained k-means clustering (default: 42, the value used for the manuscript)
 
 #### Output
 * `*.pickle (specified by --output)`  
@@ -326,7 +300,12 @@ $ scBAMpler make-pseudobulks \
 
 
 ### 3. Generate Hypothetical Cell Populations
-DESCRIPTION TEXT .
+By merging pseudo-bulks from the previous step into candidate populations 
+and scoring each one, we can make populations spanning a range of
+cell-to-cell homogeneity to choose from.
+
+The output is a table of candidate populations, each
+described only by the clusters composing it.
 
 ```
 #Sample 2000 combinations from all clusters
@@ -335,15 +314,17 @@ $ scBAMpler mix-pseudobulks \
     --output example_output/combos_all.csv \
     --groups all \
     --n-combos 2000 \
-    --cluster-size 50
+    --cluster-size 50 \
+    --ft-sizes 200 300 400 500 600 700 800
 
 #Sample 1000 combinations from K562 and HEPG2 dominated clusters
 $ scBAMpler mix-pseudobulks \
-    --input example_output/medoids_s5000.pickle \
+    --input example_output/medoids_s50.pickle \
     --output example_output/combos_k562_hepg2.csv \
     --groups K562 HEPG2 \
-    --n-combos 1000 \
-    --cluster-size 50
+    --n-combos 500 \
+    --cluster-size 50 \
+    --ft-sizes 200 250 300 250 400
 
 cat combos_all.csv combos_k562_hepg2.csv > combos_combined.csv
 ```
@@ -385,47 +366,121 @@ cat combos_all.csv combos_k562_hepg2.csv > combos_combined.csv
       groups_sampled            value of --groups used to generate this row
 
 
-### 4. Select Cell Populations of interest and optionally write cell-barcodes for downstream analyses. 
-DESCRIPTION TEXT .
-        
+### 4. Select Cell Populations of interest
+This step should be very dependent on each users goal, so it is done interactively in
+[notebooks/inspect-select-combos.ipynb](notebooks/inspect-select-combos.ipynb) rather than by a
+command.
+
+The previous step will generate many candidate populations, here we prioritize what are important qualities
+to select on. In the manuscript, we focus on **chromatin similarity** (e.g. distance to a reference label's centroid) 
+and **sequencing depth** (e.g. total peak read pairs). The notebook selects on both at once to give 
+populations that differ in homogeneity while holding depth roughly constant, and vice versa, so the two effects can be separated downstream. Candidates that are poorly cohesive, or too far from their reference
+label, are excluded first.
+
+The reason this is a notebook and not a command is that most of the choices — which similarity and
+depth targets are interesting, where to put the cohesion cutoff — only make sense once you have seen
+the distributions for your own data. The notebook plots them before you threshold on them.
+
 ```
-#Alternatively, if you want to visualize the distribution in a notebook and output from there you could run something similar to
-helper_scripts/inspect-select-combos.ipynb
+$ conda activate scBAMpler_env
+$ pip install seaborn matplotlib jupyter   # only needed for the notebook
+#amanda add this to the env tomorrow. 
 
-$ scBAMpler select-populations \
-    --input example_output/combos_all.csv \
-    --pickle example_output/medoids.pickle \ 
-    --output selected/ \
-    --ref-labels K562 HEPG2 \\ ???? AMANDA
-    --n-per-group 20
+$ jupyter notebook notebooks/inspect-select-combos.ipynb
 ```
 
-#### Input Parameters
-* `--input`  
-    -  CSV from gen-pseudobulk-combos
-* `--pickle`  
-    - Pickle file from make-pseudobulks (needed to resolve cluster → barcode mappings)
-* `--output`
-    - Output directory (created if it does not exist)
-
-* `--ref-labels`
-    - Reference labels to use as the X axis for selection.
-                        One selection pass is run per label.
-                        (default: all labels found in the data)
-
-* `--n-per-group`
-    - Number of combinations to select per reference label per read-depth bin (default: 20)
-
-* `--write-barcodes`
-    - If set, write one CSV per selected combo with columns barcode and label, suitable for sinto filterbarcodes.
+Set the paths and parameters in the first cells, then run through. It reads the pickle from step 2
+and the CSV from step 3, and writes the barcode files that step 5 consumes.
 
 #### Output
 * `selected_combos.csv`
-    - All selected combinations with full summary stats
-* `barcodes/`
-    - (if --write-barcodes) One CSV per combo: combo_<ID>.barcodes.csv  with columns CB, <label_col>
+    - All selected populations with full summary stats. A record for you; step 5 does not read it.
+* `barcodes/combo_<ID>.<label>.barcodes.csv`
+    - One file per population per label. **This is the interface to step 5** — see the format below.
 
-      
+
+
+### 5. Extract each population into a BAM
+Finally, turn the selected populations into actual datasets. This writes one bash script per
+population rather than running anything, since each population needs one pass over a BAM per
+contributing label (roughly 3 minutes per population on the tutorial subset).
+
+Each script filters every contributing label's BAM to that population's barcodes, merges the
+results into a single BAM, indexes it, and removes the intermediates. A mixed population draws
+cells from more than one experiment, so its reads live in more than one BAM — which is why one
+BAM must be given per label.
+
+```
+$ scBAMpler extract-populations \
+    --barcode-dir example_output/selected/barcodes \
+    --output example_output/populations/ \
+    --bam HEPG2=test_data/HEPG2_subset.bam \
+    --bam K562=test_data/K562_subset.bam \
+    --bam MCF7=test_data/MCF7_subset.bam \
+    --nproc 8
+
+# then run one, or all of them
+$ bash example_output/populations/scripts/combo_0.sh
+$ bash example_output/populations/run_all.sh
+```
+
+#### Input file structure
+Populations are discovered from the barcode filenames, which carry
+everything needed. Any directory matching the following will work, so you are not tied to the
+notebook:
+
+```text
+<barcode-dir>/
+├── combo_0.HEPG2.barcodes.csv
+├── combo_0.K562.barcodes.csv
+├── combo_1.HEPG2.barcodes.csv
+└── combo_1.MCF7.barcodes.csv
+```
+
+* **Filename:** `combo_<ID>.<label>.barcodes.csv`
+    - `<ID>` — an integer identifying the population. One output BAM is written per ID.
+    - `<label>` — the group these cells belong to. Must match a `--bam LABEL`.
+    - Files not matching this pattern are ignored.
+* **Contents:** one line per cell, two **space separated** columns, **no header**. This is what
+  `sinto filterbarcodes` expects for `--cells`:
+
+    ```text
+    ATGATAGGACCTAGGC HEPG2
+    AACTAGCACCGATCGC HEPG2
+    ```
+
+    - Column 1 — the cell barcode, which must match the `CB` tag in that label's BAM. Any
+      `<Sample>#` prefix has to be stripped first.
+    - Column 2 — the label. `sinto` names its output after this, so it must match the filename's
+      `<label>`.
+
+
+#### Input Parameters
+* `--barcode-dir`
+    - Directory of barcode files, in the layout above
+* `--output`
+    - Output directory for the scripts and the BAMs they produce
+* `--bam`
+    - `LABEL=PATH` for one label, repeated once per label
+* `--combo-ids` *(optional)*
+    - Only write scripts for these population IDs (default: all found)
+* `--nproc`
+    - Processors passed to `sinto` and `samtools` (default: 8)
+* `--output_fragment` *(optional)*
+    - Also produce a `.frags.tsv.bgz` per population
+
+#### Output
+* `scripts/combo_<ID>.sh`
+    - One extraction script per population. All paths are absolute, so they can be run or
+      submitted from any directory.
+* `run_all.sh`
+    - Runs every script above in turn
+* `combo_<ID>.bam` (+ `.bam.bai`)
+    - Written when a script is run
+* `combo_<ID>.frags.tsv.bgz`
+    - (if `--output_fragment`) Fragment file for the population
+
+
 ---------------
 
 ## Appendix: building the H5 from an ArchR project

@@ -21,15 +21,27 @@ Arguments
     --output        Path for output pickle file
     --dimred        Embedding to use for clustering: 'umap' or 'tsne' (default: umap)
     --label-col     Name of the grouping column in the embedding (default: CellLine)
-    --cluster-size  Target number of cells per pseudo-bulk cluster (default: 5000)
+    --cluster-size  Target number of cells per pseudo-bulk cluster (default: 500).
+                    The manuscript used 5000; the tutorial dataset is much smaller and
+                    uses 50. Groups with fewer cells than this are left unclustered.
     --nproc         Number of parallel processes for clustering (default: 8)
+    --seed          Random seed for the constrained k-means clustering (default: 42,
+                    the value used for the manuscript)
+
+Notes
+-----
+This reproduces the implementation used for the manuscript. Where that implementation
+differs from a textbook approach the behaviour has been kept as-is and commented
+in place (see perform_tfidf); changing it would change published results.
+
+A <output>.log file is written alongside the output pickle, recording parameters,
+cell and cluster counts, timings, and any warnings raised during the run.
 """
 
+import os
 import h5py
 import pickle
-import time
 import functools
-import argparse
 import warnings
 
 import pandas as pd
@@ -42,12 +54,32 @@ from scipy.spatial.distance import cdist
 from multiprocessing.dummy import Pool as ThreadPool
 
 
+# ── LOGGING ───────────────────────────────────────────────────────────────────
+# Everything printed to the console is also collected here and written to
+# <output>.log, so a run can be audited after the fact.
+
+_LOG_LINES = []
+
+
+def _log(msg):
+    print(msg)
+    _LOG_LINES.append(str(msg))
+
+
+def _write_log(output_file):
+    log_file = os.path.splitext(output_file)[0] + ".log"
+    with open(log_file, "w") as f:
+        for line in _LOG_LINES:
+            f.write(line + "\n")
+    print(f"Log written to: {log_file}")
+
+
 def timer(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         start = datetime.now()
         result = func(*args, **kwargs)
-        print(f"--- {datetime.now() - start} h:m:s to run '{func.__name__}' ---")
+        _log(f"--- {datetime.now() - start} h:m:s to run '{func.__name__}' ---")
         return result
     return wrapper
 
@@ -87,6 +119,10 @@ def loadH5(input_h5, dimred_method="tsne", label_col="CellLine"):
         input_df[label_col] = input_df[label_col].astype(str)
 
         # Load sparse peak matrix (CSC format)
+        # note: int16 matches the manuscript implementation. It is safe for ArchR peak
+        # matrices, where per-peak per-cell insertion counts are small, but would wrap
+        # silently above 32,767. The shape is inferred from the indices, so peaks with
+        # no counts in any cell are dropped from the end of the matrix.
         x = f["peak_matrix/x"][:].astype(np.int16)
         i = f["peak_matrix/i"][:]
         p = f["peak_matrix/p"][:]
@@ -98,7 +134,7 @@ def loadH5(input_h5, dimred_method="tsne", label_col="CellLine"):
 
 # ── CLUSTERING ────────────────────────────────────────────────────────────────
 
-def _cluster_one_cellline(df, cluster_size, seed, cellline):
+def _cluster_one_cellline(df, cluster_size, seed, cellline, nproc=8):
     """
     Run size-constrained k-means on a single cell group's embedding.
 
@@ -125,12 +161,14 @@ def _cluster_one_cellline(df, cluster_size, seed, cellline):
     X = df[["embedding1", "embedding2"]].to_numpy()
 
     if len(X) < cluster_size:
-        warnings.warn(
+        msg = (
             f"Skipping clustering for group '{cellline}': "
             f"only {len(X)} cells are available, which is fewer than the "
             f"requested cluster size of {cluster_size}. "
             f"All cells in this group will be marked as unassigned (Cluster = -1)."
         )
+        warnings.warn(msg)
+        _log(f"WARNING: {msg}")
         df = df.copy()
         df["Cluster"] = -1
         return df
@@ -144,7 +182,7 @@ def _cluster_one_cellline(df, cluster_size, seed, cellline):
         n_init=10,
         max_iter=300,
         random_state=seed,
-        n_jobs=10,
+        n_jobs=nproc,
     ).fit(X)
 
      # Assign cluster labels
@@ -203,13 +241,15 @@ def constrained_cluster(df, cluster_size=500, seed=42, nproc=8, label_col="CellL
     with ThreadPool(processes=nproc) as pool:
         results = pool.starmap(
             _cluster_one_cellline,
-            [(df_sub, cluster_size, seed, cl) for cl, df_sub in grouped],
+            [(df_sub, cluster_size, seed, cl, nproc) for cl, df_sub in grouped],
         )
 
     df = pd.concat([r for r in results if r is not None], ignore_index=True)
     df["Cluster"] = df["Cluster"].astype(str)
 
     # Assign globally unique cluster labels
+    # note: groups are visited in lexicographic order of the string cluster label
+    # ("0", "1", "10", "11", "2", ...), so m-numbering does not follow k-means order.
     i = 1
     for (label, sub_df) in df.groupby([label_col, "Cluster"]):
         if label[1] == "-1":
@@ -217,6 +257,16 @@ def constrained_cluster(df, cluster_size=500, seed=42, nproc=8, label_col="CellL
         else:
             df.loc[sub_df.index, "Cluster"] = f"m{i}"
             i += 1
+
+    # Report what survived. Cells left as m-1 are excluded from every pseudo-bulk
+    # downstream, so it is worth knowing how many there are.
+    n_unassigned = int((df["Cluster"] == "m-1").sum())
+    n_clusters = df.loc[df["Cluster"] != "m-1", "Cluster"].nunique()
+    _log(f"    {len(df)} cells in, {n_clusters} clusters formed, "
+         f"{n_unassigned} cells unassigned (Cluster = m-1)")
+    for lab, sub in df.groupby(label_col):
+        kept = int((sub["Cluster"] != "m-1").sum())
+        _log(f"      {lab}: {len(sub)} cells, {kept} assigned to clusters")
 
     return df
 
@@ -297,7 +347,9 @@ def perform_tfidf(csr_mat):
     #(10, 300)
     
     ## Inverse Document Frequency (IDF)
-    row_sums = np.array(csr_mat.sum(axis=1)).flatten()  
+    # This is an identical implementation in the manuscript, though it differs from the link above in the numerator shape
+    # It is a reasonable choice to update this section, though leaving for future consistency. 
+    row_sums = np.array(csr_mat.sum(axis=1)).flatten()
     row_sums[row_sums == 0] = 1  # avoid division by zero
     idf = np.log1p(csr_mat.shape[0] / row_sums)  # Compute IDF
     idf = diags(idf)  # Convert to a sparse diagonal matrix
@@ -369,39 +421,71 @@ def get_peakmat_medoid(sparse_peak_norm, sparse_peak, sparse_peak_colnames, embe
 
 
 def main(args):
-    #args = parse_args()
 
-    print(f"Loading HDF5: {args.input}")
+    _log(f"make-pseudobulks  started {datetime.now():%Y-%m-%d %H:%M:%S}")
+    _log(f"  input        {args.input}")
+    _log(f"  output       {args.output}")
+    _log(f"  dimred       {args.dimred}")
+    _log(f"  label-col    {args.label_col}")
+    _log(f"  cluster-size {args.cluster_size}")
+    _log(f"  nproc        {args.nproc}")
+    _log(f"  seed         {args.seed}")
+
+    #create the output directory if it doesn't exist, so steps can be run out of order
+    out_dir = os.path.dirname(args.output)
+    if out_dir: os.makedirs(out_dir, exist_ok=True)
+
+    _log(f"Loading HDF5: {args.input}")
     embedding_df, sparse_peak, sparse_peak_colnames = loadH5(
         args.input, args.dimred, label_col=args.label_col
     )
+    _log(f"    peak matrix: {sparse_peak.shape[0]} peaks x {sparse_peak.shape[1]} cells")
 
-    print(f"Clustering cells (cluster size={args.cluster_size}, nproc={args.nproc})")
+    _log(f"Clustering cells (cluster size={args.cluster_size}, nproc={args.nproc})")
     embedding_df = constrained_cluster(
-        embedding_df, cluster_size=args.cluster_size, nproc=args.nproc,
+        embedding_df, cluster_size=args.cluster_size, seed=args.seed, nproc=args.nproc,
         label_col=args.label_col
     )
 
-    print("Computing embedding centroids")
+    _log("Computing embedding centroids")
     medoid_stats = get_embedding_coord(embedding_df, label_col=args.label_col)
 
-    print("Applying TF-IDF normalization")
+    _log("Applying TF-IDF normalization")
     sparse_peak_norm = perform_tfidf(sparse_peak)
 
-    print("Generating pseudo-bulk profiles")
+    _log("Generating pseudo-bulk profiles")
     medoid_df, read_depth = get_peakmat_medoid(
         sparse_peak_norm, sparse_peak, sparse_peak_colnames, embedding_df,
         label_col=args.label_col
     )
     medoid_stats["PeakReads"] = read_depth
+    _log(f"    {medoid_df.shape[1]} pseudo-bulk profiles "
+         f"({medoid_df.shape[0]} peaks each)")
 
-    print("Computing pairwise correlations")
+    _log("Computing pairwise correlations")
     corr_matrix = np.corrcoef(medoid_df.T)
+
+    # The rows of corr_matrix follow medoid_df.columns, but the labels come from
+    # medoid_stats.index. They agree only because get_peakmat_medoid and
+    # get_embedding_coord iterate the same groupbys in the same order. If that ever
+    # stops being true, every correlation would be silently attributed to the wrong
+    # pseudo-bulk, so check rather than assume.
+    if list(medoid_df.columns) != list(medoid_stats.index):
+        msg = (
+            "medoid_df columns and medoid_stats index are not in the same order. "
+            "The correlation matrix labels may not match its contents. "
+            f"medoid_df: {list(medoid_df.columns)[:5]}... "
+            f"medoid_stats: {list(medoid_stats.index)[:5]}..."
+        )
+        warnings.warn(msg)
+        _log(f"WARNING: {msg}")
+
     cor_df = pd.DataFrame(corr_matrix, index=medoid_stats.index, columns=medoid_stats.index)
 
-    print(f"Saving results to: {args.output}")
+    _log(f"Saving results to: {args.output}")
     with open(args.output, "wb") as f:
         pickle.dump([embedding_df, medoid_df, medoid_stats, cor_df], f)
 
-    print("Done.")
+    _log(f"Done. finished {datetime.now():%Y-%m-%d %H:%M:%S}")
+    _write_log(args.output)
 

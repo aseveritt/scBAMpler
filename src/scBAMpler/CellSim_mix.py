@@ -67,9 +67,12 @@ Output
 
 """
 
+import os
+import math
 import pickle
 import random
 import argparse
+import warnings
 import functools
 import multiprocessing as mp
 
@@ -167,7 +170,9 @@ def process_combo(combo):
     closest_label = dist_series.idxmin()
     cl_dists = dist_series.values
 
-    return [combo, depth, mean_cor, sse, dominant, dom_perc, closest_label, cl_dists]
+    # return the cluster IDs as a plain list of str, not the ndarray. str(ndarray) is
+    return [[str(c) for c in combo], depth, mean_cor, sse,
+            dominant, dom_perc, closest_label, cl_dists]
 
 
 @timer
@@ -239,6 +244,10 @@ def parse_args():
 def main(args):
     #args = parse_args()
 
+    #create the output directory if it doesn't exist, so steps can be run out of order
+    out_dir = os.path.dirname(args.output)
+    if out_dir: os.makedirs(out_dir, exist_ok=True)
+
     # ── Load pickle ───────────────────────────────────────────────────────────
     print(f"Loading: {args.input}")
     with open(args.input, "rb") as f:
@@ -248,14 +257,17 @@ def main(args):
     print(f"Labels found: {all_labels}")
 
     # ── Build cluster pool ────────────────────────────────────────────────────
-    # All pseudo-bulk cluster IDs (exclude label-level centroids, keep m* clusters)
-    all_clusters = [i for i in medoid_stats.index if str(i).startswith("m")]
+    # medoid_stats holds one row per pseudo-bulk cluster AND one per label centroid.
+    # Identify the centroids by name rather than by an "m" prefix: a label such as
+    # "myeloid" would otherwise be mistaken for a cluster.
+    label_set = set(all_labels)
+    all_clusters = [i for i in medoid_stats.index if i not in label_set]
 
     # Assign dominant label to each cluster if not already present
     if "DominantLabel" not in medoid_stats.columns:
         dominant_labels = []
         for c in medoid_stats.index:
-            if str(c).startswith("m"):
+            if c not in label_set:
                 sub = embedding_df.loc[embedding_df.Cluster == c, args.label_col]
                 dominant_labels.append(sub.value_counts().idxmax() if len(sub) else None)
             else:
@@ -272,7 +284,7 @@ def main(args):
         cluster_pool = medoid_stats[
             medoid_stats["DominantLabel"].isin(args.groups)
         ].index.tolist()
-        cluster_pool = [c for c in cluster_pool if str(c).startswith("m")]
+        cluster_pool = [c for c in cluster_pool if c not in label_set]
         group_tag = "+".join(sorted(args.groups))
         print(f"Sampling from {len(cluster_pool)} clusters dominated by: {args.groups}")
 
@@ -284,12 +296,49 @@ def main(args):
 
     # ── Generate combinations ─────────────────────────────────────────────────
     print(f"Generating combinations for ft-sizes: {args.ft_sizes}")
+
+    #a combination of r clusters represents r * cluster_size cells, so the largest
+    #population this dataset can express is the whole pool.
+    pool_n = len(cluster_pool)
+    max_ft = pool_n * args.cluster_size
+
     possible_combos = []
     for ft_size in args.ft_sizes:
         r = max(1, round(ft_size / args.cluster_size))
+
+        if r > pool_n:
+            msg = (
+                f"ft-size {ft_size} needs {r} clusters but only {pool_n} are available, "
+                f"so no combinations were generated for it. The largest population this "
+                f"dataset supports is {max_ft} cells "
+                f"({pool_n} clusters x {args.cluster_size} cells). Reduce --ft-sizes, "
+                f"reduce --cluster-size in make-pseudobulks, or use a larger dataset."
+            )
+            warnings.warn(msg)
+            print(f"  ft_size={ft_size:>6}  r={r}  generated=0   SKIPPED: {msg}")
+            continue
+
+        #with combinations sampled as sets, C(pool, r) is a hard ceiling on how many
+        #distinct combinations can exist, regardless of --n-combos.
+        n_possible = math.comb(pool_n, r)
+        if n_possible < args.n_combos:
+            warnings.warn(
+                f"ft-size {ft_size} (r={r}) has only {n_possible} distinct combinations "
+                f"available from {pool_n} clusters, fewer than the {args.n_combos} "
+                f"requested. All {n_possible} will be returned."
+            )
+
         combos = generate_combinations(cluster_pool, r=r, n=args.n_combos, seed=args.seed)
         possible_combos.extend(combos)
-        print(f"  ft_size={ft_size:>6}  r={r}  generated={len(combos)}")
+        print(f"  ft_size={ft_size:>6}  r={r}  generated={len(combos)}"
+              f"{'' if n_possible >= args.n_combos else f'  (max possible: {n_possible})'}")
+
+    if not possible_combos:
+        raise ValueError(
+            f"No combinations could be generated for any requested ft-size "
+            f"{args.ft_sizes}. With {pool_n} clusters of {args.cluster_size} cells, "
+            f"ft-sizes must be at most {max_ft}."
+        )
 
     print(f"Total combinations to score: {len(possible_combos)}")
 

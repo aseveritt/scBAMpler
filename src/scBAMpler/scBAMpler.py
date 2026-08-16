@@ -1,5 +1,5 @@
 import argparse, sys, shlex
-from scBAMpler import build_dict, perform_sampling, downsampling_functions, generateBAM, CellSim_make, CellSim_mix, CellSim_select
+from scBAMpler import build_dict, perform_sampling, generateBAM, CellSim_make, CellSim_mix, CellSim_extract
 
 def main(argv=None):
 
@@ -99,9 +99,12 @@ def main(argv=None):
     parser_pseudo.add_argument("--cluster-size", 
                                type=int, default=500, metavar="N",
                                help="Target number of cells per pseudo-bulk cluster")
-    parser_pseudo.add_argument("--nproc", 
+    parser_pseudo.add_argument("--nproc",
                                type=int, default=8, metavar="N",
                                help="Number of parallel processes for clustering")
+    parser_pseudo.add_argument("--seed",
+                               type=int, default=42, metavar="N",
+                               help="Random seed for reproducibility")
 
     # Subcommand: mix-pseudobulks
     parser_mix = subparsers.add_parser("mix-pseudobulks", 
@@ -136,18 +139,30 @@ def main(argv=None):
                         help="Random seed for reproducibility")
     
 
-    # Subcommand: select-populations
-    parser_select = subparsers.add_parser("select-populations", 
-                                       help="Generate and score random pseudo-bulk combinations")
-    parser_select.add_argument("--input", 
-                        required=True, metavar="FILE",
-                        help="CSV from gen-pseudobulk-combos")
-    parser_select.add_argument("--pickle", 
-                        required=True, metavar="FILE",
-                        help="Pickle file from make-pseudobulks (for barcode resolution)")
-    parser_select.add_argument("--output", 
+    # Subcommand: extract-populations
+    parser_extract = subparsers.add_parser("extract-populations",
+                                       help="Write bash scripts that extract each selected population into a BAM")
+    parser_extract.add_argument("--barcode-dir",
                         required=True, metavar="DIR",
-                        help="Output directory")
+                        help="Directory of barcode files named combo_<ID>.<label>.barcodes.csv "
+                             "(as written by notebooks/inspect-select-combos.ipynb)")
+    parser_extract.add_argument("--output",
+                        required=True, metavar="DIR",
+                        help="Output directory for scripts and BAMs")
+    parser_extract.add_argument("--bam",
+                        required=True, action="append", metavar="LABEL=PATH",
+                        help="BAM for one label, repeatable. One is required for every label "
+                             "present in the barcode files. "
+                             "e.g. --bam HEPG2=test_data/HEPG2_subset.bam")
+    parser_extract.add_argument("--combo-ids",
+                        type=int, nargs="+", default=None, metavar="ID",
+                        help="Only write scripts for these population IDs. Default: all found.")
+    parser_extract.add_argument("--nproc",
+                        type=int, default=8, metavar="N",
+                        help="Processors passed to sinto and samtools")
+    parser_extract.add_argument("--output_fragment",
+                        action="store_true",
+                        help="Also produce a .frags.tsv.bgz per population")
     
     
     args = parser.parse_args(cleaned_args)
@@ -167,8 +182,8 @@ def main(argv=None):
     elif args.command == "mix-pseudobulks":
         CellSim_mix.main(args)
         
-    elif args.command == "select-populations":
-        CellSim_select.main(args)
+    elif args.command == "extract-populations":
+        CellSim_extract.main(args)
         
         
         
