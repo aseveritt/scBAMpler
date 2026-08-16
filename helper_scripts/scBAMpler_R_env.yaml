@@ -1,0 +1,41 @@
+# Environment for the optional R helper scripts in this directory:
+#
+#   peak_calling/call_peaks.R  - call and standardize peaks (README, Data Quality Usage step 1)
+#   MakeH5.R                   - build the extension's H5 input from an ArchR project (README appendix)
+
+name: scBAMpler_R_env
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  # core
+  - r-base=4.5   # pinned: all the bioconductor-* builds below are compiled against a specific R minor version
+  - zlib
+  - macs3
+
+  # call_peaks.R
+  - r-optparse
+  - r-dplyr
+  - r-stringr
+  - r-data.table
+  - bioconductor-genomicranges
+  - bioconductor-genomicfeatures
+  - bioconductor-rtracklayer
+  - bioconductor-annotationdbi
+  - bioconductor-txdb.hsapiens.ucsc.hg38.knowngene
+
+  # MakeH5.R: ArchR prerequisites
+  - r-matrix
+  - r-remotes
+  - r-devtools
+  - r-seurat
+  - r-uwot
+  - r-rtsne
+  - bioconductor-rhdf5
+  - bioconductor-chromvar
+  - bioconductor-complexheatmap
+  - bioconductor-motifmatchr
+  - bioconductor-sparsematrixstats
+  - bioconductor-bsgenome.hsapiens.ucsc.hg38

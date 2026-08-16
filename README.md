@@ -15,7 +15,7 @@ Please clone the repository:
 
 Then, create an environment with required dependencies. Installation and information about miniforge can be found [here](https://github.com/conda-forge/miniforge)
 
-    $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto "setuptools<81" -y
+    $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto "setuptools<81" wget coreutils grep -y
     $ conda activate scBAMpler_env
     $ pip install h5py k-means-constrained #specific to cell similarity extension
     $ cd scBAMpler/
@@ -25,35 +25,72 @@ Then, create an environment with required dependencies. Installation and informa
 ---------------
 
 ## Download Test Data
-Data is available on [Zenodo](TBD)
+
+All inputs needed to run this tutorial are available on [Zenodo](TBD) as individual files, so you
+can download only what the section you care about needs. Nothing in the tutorial requires you to
+regenerate an input.
+
+| File | Needed for | Description |
+|---|---|---|
+| `HEPG2_subset.bam` | Data Quality Usage, all steps | Subset of an ENCODE HepG2 scATAC-seq experiment, coordinate sorted. |
+| `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, blacklist filtered. |
+| `hg38-blacklist.v2.bed` | Data Quality Usage, step 1 *(optional)* | ENCODE exclusion list used when calling the peaks distributed here. |
+| `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined (1,111 cells passing ArchR QC). ~15MB. |
+| `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. Defines the row order of the peak matrix. |
+| `K562_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE K562 experiment. |
+| `MCF7_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE MCF-7 experiment. |
+
+Three common cases:
+
+* **Data Quality Usage only** — `HEPG2_subset.bam` and `HEPG2_subset_standardized_500bp.bed`.
+* **Exploring the extension** — `peakmat_input.h5` alone is enough to run steps 2 through 4.
+* **Extension end-to-end**, including extracting a mixed-cell-line BAM — all three BAMs, since that
+  step needs reads from every cell line.
+
 ```
 $ cd scBAMpler
-$ wget https://zenodo.org/records/XXXXX/files/test_data.tar.gz?download=1
-$ tar -xzvf test_data.tar.gz
-#2.94Gb in size
+$ mkdir -p test_data example_output   # every tutorial command reads from the first and writes to the second
 
-# every tutorial command below writes into this directory:
-$ mkdir -p example_output
-
-# optionally, if you would like to see the example output directory without running the tutorial:
-$ cd example_output/
-$ wget https://zenodo.org/records/XXXXX/files/example_output.tar.gz?download=1
-$ tar -xzvf example_output.tar.gz
-#1.68Gb in size 
+# fetch what you need, e.g. for the Data Quality Usage section:
+$ cd test_data
+$ for F in HEPG2_subset.bam HEPG2_subset_standardized_500bp.bed; do
+      wget -c "https://zenodo.org/records/XXXXX/files/${F}?download=1" -O "$F"
+  done
+$ cd ..
 ```
+
+BAM indexes are not distributed. Build them for whichever BAMs you downloaded:
+
+```
+$ samtools index test_data/HEPG2_subset.bam
+```
+
+(`create-dictionary` will index a BAM for you if the `.bai` is missing, but the R helper scripts and
+ArchR expect it to already exist.)
+
+Each file's MD5 checksum is listed in the Zenodo record if you want to verify a download.
+
+`peakmat_input.h5` is provided directly so the extension is runnable without installing R or ArchR.
+See [Appendix: building the H5 from an ArchR project](#appendix-building-the-h5-from-an-archr-project)
+if you want to regenerate it or build one from your own data.
 
 ---------------
 
 ## Data Quality Usage
 
-### 1. Call Peak Locations
+### 1. Call Peak Locations *(optional)*
 
 First, prepare your peak file. This can be done using any method you prefer—the only strict requirement is that the file be in **BED6 format**.
-If you would like to use the peak standardization code from our manuscript, we provide it here:
+If you would like to use the peak standardization code from the manuscript, we provide it here.
+
+These are R scripts and need their own environment, `scBAMpler_R_env`, which is separate from
+`scBAMpler_env` and entirely optional. The same environment is used by the
+[appendix](#appendix-building-the-h5-from-an-archr-project), so by default it also installs ArchR
+and its prerequisites — roughly 350 packages. Pass `--skip-archr` if you only want peak calling.
 
 ```
-$ bash helper_scripts/peak_calling/setup.sh
-$ conda activate macs_Renv
+$ bash helper_scripts/setup_scBAMpler_R_env.sh
+$ conda activate scBAMpler_R_env
 
 $ Rscript helper_scripts/peak_calling/call_peaks.R \
     --bam_file test_data/HEPG2_subset.bam \
@@ -75,7 +112,10 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
 * `--cores` *(optional)*  
     - Number of cores to use with `mclapply`.
 * `--exclusion_file` *(optional)*  
-    - BED file listing regions to exclude from peak calling.
+    - BED file listing regions to exclude from peak calling.  
+      The peak files distributed on Zenodo were called with `hg38-blacklist.v2.bed`, which is also
+      on Zenodo. Omitting it produces a different peak set, and therefore different FRiP values,
+      than the distributed peak file gives.
 * `--summit_file` *(optional)*  
     - Use this if a MACS3 file already exists to run only the standardization step.
 
@@ -213,8 +253,13 @@ $ cmp <(samtools view example_output/HEPG2_subset_c500_s12.bam) <(samtools view 
 
 ## Cell Homogeneity Extension
 
-### 1. Generate H5 input file
-First, generate an HDF5 file to store the single-cell ATAC-seq data: a sparse peak-by-cell accessibility matrix plus UMAP and tSNE embeddings. The helper script creates this from an ArchR project, but any file following the structure below will work.
+### 1. The H5 input file
+
+This extension takes a single input: an HDF5 file holding a sparse peak-by-cell accessibility
+matrix plus a low-dimensional embedding of the cells. `test_data/peakmat_input.h5` is provided in
+Zenodo, so **you do not need to build anything for this step** — skip to step 2 to use it.
+
+The file format is the only requirement. Any file matching the structure below will work:
 
 ```text
 peakmat_input.h5
@@ -228,13 +273,18 @@ peakmat_input.h5
     └── tsne_df    table       tSNE coordinates per cell (see below)
 ```
 
-Each embedding table has the form: (x coordinate, y coordinate, cell barcode, label-col)
-To generate using the helper script:
+`peak_matrix` is a CSC-format sparse matrix of peaks × cells, reconstructed in Python as
+`scipy.sparse.csc_matrix((x, i, p), shape=(n_peaks, n_cells))`. Row order corresponds to the peak
+file used to build it (`union_standardized_500bp.bed` for the distributed data).
 
-```
-$ Rscript helper_scripts/MakeH5.R
+Each embedding table has four columns: (x coordinate, y coordinate, cell barcode, label column).
+The label column is what `--label-col` refers to in later steps, and is the grouping variable whose
+homogeneity you will be varying — `CellLine` in the test data, but it can be any categorical
+per-cell annotation.
 
-```
+We generated the distributed file from an ArchR project. That route requires R and is not part of
+the pipeline itself, so it lives in
+[Appendix: building the H5 from an ArchR project](#appendix-building-the-h5-from-an-archr-project).
 
 ### 2. Make small, pseudobulks of identical size. 
 Next, we build pseudobulk profiles and collect summary information to support a bottom-up approach for constructing mixed synthetic populations.
@@ -376,6 +426,54 @@ $ scBAMpler select-populations \
     - (if --write-barcodes) One CSV per combo: combo_<ID>.barcodes.csv  with columns CB, <label_col>
 
       
+---------------
+
+## Appendix: building the H5 from an ArchR project
+
+This is how `peakmat_input.h5` was produced, but it's not a required step — the end file is in the
+Zenodo archive. Any file matching the schema in the extension's step 1 will work. This section
+exists for two audiences: anyone reproducing our inputs from scratch, and anyone adapting the
+workflow to their own ArchR project.
+
+`helper_scripts/H5_from_ArchR/MakeH5.R` extracts a peak matrix and embeddings from an ArchR project and writes
+them to HDF5. It requires:
+
+* **The `scBAMpler_R_env` environment** — the same one used for peak calling in step 1 of the Data
+  Quality Usage section. If you have not created it yet:
+
+    ```
+    $ bash helper_scripts/setup_scBAMpler_R_env.sh
+    $ conda activate scBAMpler_R_env
+    ```
+
+* **One BAM per cell line**, coordinate sorted, with barcodes in the `CB` tag. The distributed data
+  uses `HEPG2_subset.bam`, `K562_subset.bam`, and `MCF7_subset.bam`.
+
+* **A union peak set** spanning all cell lines, which defines the rows of the matrix. Build it by
+  calling peaks per cell line, then merging with `--union_files`:
+
+    ```
+    $ Rscript helper_scripts/peak_calling/call_peaks.R \
+        --outdir test_data/ \
+        --union_files HEPG2_subset_standardized_500bp.bed,K562_subset_standardized_500bp.bed,MCF7_subset_standardized_500bp.bed \
+        --union_outfile union_standardized_500bp.bed \
+        --cores 8
+    ```
+
+With those in place:
+
+```
+$ Rscript helper_scripts/H5_from_ArchR/MakeH5.R
+```
+
+Input paths, sample names, and the output filename are constants at the top of the script —
+edit them to point at your own data. The script builds arrow files, adds the peak matrix, runs
+iterative LSI, then UMAP and tSNE, and writes the result to `test_data/peakmat_input.h5`.
+
+Note that ArchR applies its own QC filtering, so the cell count in the H5 is smaller than the number
+of barcodes in the input BAMs: the distributed file contains **1,111 cells** from an input of 5,000
+barcodes per cell line. If you rebuild it and land near that number, you are in the right place.
+
 ---------------
 ## Citation
 

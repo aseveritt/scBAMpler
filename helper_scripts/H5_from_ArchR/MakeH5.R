@@ -12,9 +12,7 @@
 # ── SETUP ─────────────────────────────────────────────────────────────────────
  
 library(ArchR)
-library(ggrepel)
 library(dplyr)
-library(pals)
 library(rhdf5)
 library(Matrix)
  
