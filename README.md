@@ -17,7 +17,7 @@ Then, create an environment with required dependencies. Installation and informa
 
     $ conda create -n scBAMpler_env -c conda-forge -c bioconda python=3.10 numpy scipy pandas samtools bedtools sinto "setuptools<81" wget coreutils grep -y
     $ conda activate scBAMpler_env
-    $ pip install h5py k-means-constrained #specific to cell similarity extension
+    $ pip install h5py k-means-constrained seaborn matplotlib jupyter #specific to cell similarity extension
     $ cd scBAMpler/
     $ pip install .
 
@@ -54,10 +54,9 @@ regenerate an input.
 First, prepare your peak file. This can be done using any method you prefer—the only strict requirement is that the file be in **BED6 format**.
 If you would like to use the peak standardization code from the manuscript, we provide it here.
 
-These are R scripts and need their own environment, `scBAMpler_R_env`, which is separate from
-`scBAMpler_env` and entirely optional. The same environment is used by the
+These are R scripts and need their own environment `scBAMpler_R_env`. The same environment is used by the
 [appendix](#appendix-building-the-h5-from-an-archr-project), so by default it also installs ArchR
-and its prerequisites — roughly 350 packages. Pass `--skip-archr` if you only want peak calling.
+and its prerequisites — pass `--skip-archr` if you only want peak calling.
 
 ```
 $ bash helper_scripts/setup_scBAMpler_R_env.sh
@@ -84,9 +83,6 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
     - Number of cores to use with `mclapply`.
 * `--exclusion_file` *(optional)*  
     - BED file listing regions to exclude from peak calling.  
-      The peak files distributed on Zenodo were called with `hg38-blacklist.v2.bed`, which is also
-      on Zenodo. Omitting it produces a different peak set, and therefore different FRiP values,
-      than the distributed peak file gives.
 * `--summit_file` *(optional)*  
     - Use this if a MACS3 file already exists to run only the standardization step.
 
@@ -260,7 +256,7 @@ the pipeline itself, so it lives in
 ### 2. Make small, pseudobulks of identical size. 
 Next, we build pseudobulk profiles and collect summary information to support a bottom-up approach for constructing mixed synthetic populations.
 
-In this example, we cluster cells into groups of 50 within each CellLine. For real datasets, a larger cluster size (e.g., 500 cells) may be more appropriate. Although CellLine is used here to define groups, the workflow can be applied to any categorical variable.
+Cells are clustered within each group given by --label-col; CellLine is used here, but any categorical annotation works. --cluster-size sets the unit for everything downstream — we use 50 because the tutorial dataset is small; the manuscript used 5000. Pass the same value to mix-pseudobulks in the next step.
 
 ```
 $ scBAMpler make-pseudobulks \
@@ -382,10 +378,6 @@ depth targets are interesting, where to put the cohesion cutoff — only make se
 the distributions for your own data. The notebook plots them before you threshold on them.
 
 ```
-$ conda activate scBAMpler_env
-$ pip install seaborn matplotlib jupyter   # only needed for the notebook
-#amanda add this to the env tomorrow. 
-
 $ jupyter notebook notebooks/inspect-select-combos.ipynb
 ```
 
@@ -419,14 +411,12 @@ $ scBAMpler extract-populations \
     --bam MCF7=test_data/MCF7_subset.bam \
     --nproc 8
 
-# then run one, or all of them
-$ bash example_output/populations/scripts/combo_0.sh
-$ bash example_output/populations/run_all.sh
+$ bash example_output/populations/scripts/combo_0.sh #then run one. 
+$ bash example_output/populations/run_all.sh #or all of them.
 ```
 
 #### Input file structure
-Populations are discovered from the barcode filenames, which carry
-everything needed. Any directory matching the following will work, so you are not tied to the
+Populations are discovered from the barcode filenames. Any directory matching the following will work, so you are not tied to the
 notebook:
 
 ```text
@@ -441,8 +431,7 @@ notebook:
     - `<ID>` — an integer identifying the population. One output BAM is written per ID.
     - `<label>` — the group these cells belong to. Must match a `--bam LABEL`.
     - Files not matching this pattern are ignored.
-* **Contents:** one line per cell, two **space separated** columns, **no header**. This is what
-  `sinto filterbarcodes` expects for `--cells`:
+* **Contents:** one line per cell, two **space separated** columns, **no header**.
 
     ```text
     ATGATAGGACCTAGGC HEPG2
