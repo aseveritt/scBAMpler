@@ -175,7 +175,7 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   results <- mclapply(seq_along(data_chunks), 
                     function(i){wrapper_for_per_chromosome(data_chunks[[i]], peaklen)},
                     mc.cores = ncores)
-  # EDITED BY AMANDA: a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
+  # a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
   if (any(vapply(results, function(r) is.null(r) || inherits(r, "try-error"), logical(1)))) stop("mclapply worker(s) failed (likely OOM) -- rerun with more memory or fewer --cores")
   
   unique_peaks = unlist(lapply(results, `[[`, 1))
@@ -184,8 +184,8 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   union_peaks = c(unique_peaks, max_groupsof2, max_greaterthan2)
   
   message(sprintf("%s total summits to begin with", length(gr)))
-  message(sprintf("%s peaks overlaped no other peak", length(unique_peaks)))
-  message(sprintf("%s peaks overlaped one other peak -- removing %s peaks", length(max_groupsof2), length(max_groupsof2)))
+  message(sprintf("%s peaks overlapped no other peak", length(unique_peaks)))
+  message(sprintf("%s peaks overlapped one other peak -- removing %s peaks", length(max_groupsof2), length(max_groupsof2)))
   message(sprintf("the remaining peaks were summarized into %s peaks", length(max_greaterthan2)))
   message(sprintf("Ultimately, there are %s peaks left", length(union_peaks)))
   
@@ -286,7 +286,7 @@ make_union <- function(infiles, outdir, outfile, ncores=1){
   results <- mclapply(seq_along(data_chunks), 
                       function(i){wrapper_for_per_chromosome(data_chunks[[i]], -1)},
                       mc.cores = ncores)
-  # EDITED BY AMANDA: a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
+  # a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
   if (any(vapply(results, function(r) is.null(r) || inherits(r, "try-error"), logical(1)))) stop("mclapply worker(s) failed (likely OOM) -- rerun with more memory or fewer --cores")
     
   unique_peaks = unlist(lapply(results, `[[`, 1))
@@ -295,8 +295,8 @@ make_union <- function(infiles, outdir, outfile, ncores=1){
   union_peaks = c(unique_peaks, max_groupsof2, max_greaterthan2)
   
   message(sprintf("%s total summits to begin with", length(gr)))
-  message(sprintf("%s peaks overlaped no other peak", length(unique_peaks)))
-  message(sprintf("%s peaks overlaped one other peak -- removing %s peaks", length(max_groupsof2), length(max_groupsof2)))
+  message(sprintf("%s peaks overlapped no other peak", length(unique_peaks)))
+  message(sprintf("%s peaks overlapped one other peak -- removing %s peaks", length(max_groupsof2), length(max_groupsof2)))
   message(sprintf("the remaining peaks were summarized into %s peaks", length(max_greaterthan2)))
   message(sprintf("Ultimately, there are %s peaks left", length(union_peaks)))
   

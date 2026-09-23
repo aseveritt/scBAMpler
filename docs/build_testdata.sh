@@ -105,7 +105,6 @@ Rscript helper_scripts/peak_calling/call_peaks.R \
 Rscript helper_scripts/H5_from_ArchR/MakeH5.R
 
 
-
 #### -------- example_output.tar.gz contents -------- ###
 conda activate scBAMpler_env
 
@@ -154,6 +153,7 @@ cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.
 
 
 #run notebook. 
+
 scBAMpler extract-populations \
     --barcode-dir example_output/selected/barcodes \
     --output example_output/populations/ \

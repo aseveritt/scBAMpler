@@ -133,7 +133,7 @@ $ scBAMpler create-dictionary \
 
 
 ### 3. Strategically Downsample BAM
-Here, we specify which feature to downsample and to what extent. The maximum values are roughly outlined in the `.summary.txt` file generated in the previous step. For FRiP, these limits are harder to estimate, but the program will give warning if the requested FRiP is considered too extreme.
+Here, we specify which feature to downsample and to what extent. The maximum values are roughly outlined in the `.summary.txt` file generated in the previous step. For FRiP, these limits are harder to estimate, but the program will stop with an error if the requested FRiP is considered too extreme.
 
 ```
 $ scBAMpler sampler \
@@ -242,7 +242,7 @@ peakmat_input.h5
 
 `peak_matrix` is a CSC-format sparse matrix of peaks × cells, reconstructed in Python as
 `scipy.sparse.csc_matrix((x, i, p), shape=(n_peaks, n_cells))`. Row order corresponds to the peak
-file used to build it (`union_standardized_500bp.bed` for the distributed data).
+file used to build it (`union_standardized_500bp.bed`).
 
 Each embedding table has four columns: (x coordinate, y coordinate, cell barcode, label column).
 The label column is what `--label-col` refers to in later steps, and is the grouping variable whose
@@ -313,14 +313,14 @@ $ scBAMpler mix-pseudobulks \
     --cluster-size 50 \
     --ft-sizes 200 300 400 500 600 700 800
 
-#Sample 1000 combinations from K562 and HEPG2 dominated clusters
+#Sample 500 combinations from K562 and HEPG2 dominated clusters
 $ scBAMpler mix-pseudobulks \
     --input example_output/medoids_s50.pickle \
     --output example_output/combos_k562_hepg2.csv \
     --groups K562 HEPG2 \
     --n-combos 500 \
     --cluster-size 50 \
-    --ft-sizes 200 250 300 250 400
+    --ft-sizes 200 250 300 350 400
 
 cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.csv) > example_output/combos_combined.csv
 ```
@@ -332,14 +332,15 @@ cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.
     - Path for output CSV file
 * `--groups`  
     - Labels to restrict sampling to (dominant label per cluster), or 'all' for unbiased sampling across all clusters
-    - Choices: `"all"` or comma separated list of label sets to specifically mix e.g. `"K562, HEPG2"`
+    - Choices: `"all"` or comma separated list of label sets to specifically mix e.g. `"K562 HEPG2"`
 * `--n-combos`  
     - Number of random combinations to generate (default: 2000)
 * `--cluster-size`  
     - Cells per pseudo-bulk cluster
-    - Should be a muliple of the clusters layed out above-- amanda I think we can infer this directly.
+    - Must match the `--cluster-size` used in make-pseudobulks.
 * `--ft-sizes`
     - Target footprint sizes in cells to sample combinations for. Combinations of r=ft_size/cluster_size clusters are drawn.
+    - Sizes that round to a single cluster (r=1) are skipped with a warning, since a lone cluster has no pairwise correlations to score.
     - (default: 500 1000 2000 5000 10000 15000 20000)
 * `--label-col`  
     - Name of the grouping column (default: CellLine)
@@ -358,7 +359,7 @@ cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.
       dominant_label            most common label
       dominant_label_perc       % of cells from the dominant label
       closest_label             label centroid closest to this combination
-      label_dist_*              distance to each label's centroid (one col each)
+      dist_to_<label>           distance to each label's centroid (one col each)
       groups_sampled            value of --groups used to generate this row
 
 
@@ -515,7 +516,7 @@ edit them to point at your own data. The script builds arrow files, adds the pea
 iterative LSI, then UMAP and tSNE, and writes the result to `test_data/peakmat_input.h5`.
 
 Note that ArchR applies its own QC filtering, so the cell count in the H5 is smaller than the number
-of barcodes in the input BAMs: the distributed file contains **1,111 cells** from an input of 5,000
+of barcodes in the input BAMs: the distributed file contains **5,511 cells** from an input of 2,000
 barcodes per cell line. If you rebuild it and land near that number, you are in the right place.
 
 ---------------

@@ -59,7 +59,6 @@ import re
 import sys
 import glob
 import stat
-import argparse
 import collections
 
 
@@ -264,6 +263,3 @@ def main(args):
     print(f"To extract all {len(written)}:")
     print(f"    bash {runner}")
 
-
-if __name__ == '__main__':
-    main(argparse.Namespace())

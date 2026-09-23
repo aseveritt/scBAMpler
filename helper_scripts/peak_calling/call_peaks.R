@@ -9,7 +9,7 @@ parser <- add_option(parser, c("-b", "--bam_file"), type="character",  default=N
                      help="Path to bamfile", 
                      dest="bam_file")
 parser <- add_option(parser, c("-o", "--outdir"), type="character",  default=NULL, action="store",
-                     help="Path to output diretory", 
+                     help="Path to output directory", 
                      dest="out_dir")
 parser <- add_option(parser, c("-l", "--peak_length"), type="integer",  default=500, action="store",
                      help="Length to standardize peaks to", 

@@ -1,10 +1,10 @@
 #downsampling_functions.py
 
-import pysam, os, subprocess, sys, io, itertools, functools, pickle
+import pysam, os, subprocess, sys, itertools, functools, shlex
 import pandas as pd
 import numpy as np
 from collections import Counter
-from datetime import timedelta, datetime
+from datetime import datetime
 
 def internal_timer(func):
     @functools.wraps(func)
@@ -107,23 +107,32 @@ def IntersectPeaks(bam_file, peak_file, intersect_file, timeout = 21600, verbose
        "-abam {bam} "
        "-b <(bedtools sort -i {bed} -faidx <(samtools view -H {bam} | grep '^@SQ' | sed 's/.*SN://' | cut -f1)) "
        "-sorted -f 0.75 -ubam | "
-       "samtools view -h - | awk '{awk}' | sort | uniq | gzip > {out}").format(
-    bam=bam_file, bed=peak_file, awk=awk_statement, out=intersect_file)
-    
-    #cmd = "set -o pipefail; bedtools intersect -abam %s -b %s -sorted -f 0.75 -ubam | samtools view -h - | awk '%s' | sort | uniq | gzip > %s" % (bam_file, peak_file, awk_statement, intersect_file)
+       "samtools view -h - | awk {awk} | sort | uniq | gzip > {out}").format(
+    bam=shlex.quote(bam_file), bed=shlex.quote(peak_file),
+    awk=shlex.quote(awk_statement), out=shlex.quote(intersect_file))
+
     #exit on failure rather than returning: downstream steps would otherwise read an
     #empty intersect file and fail with a confusing pandas error instead of this one.
+    #remove the partial output first, otherwise the next run refuses to overwrite it.
     try:
         subprocess.check_output(cmd, shell=True, executable='/bin/bash', stderr=subprocess.STDOUT, timeout=timeout)
     except subprocess.CalledProcessError as e:
         stderr_output = e.output  # This contains the stderr output
         print("ERROR: Bedtools command failed. stderr:", stderr_output.decode())
+        _remove_partial(intersect_file)
         sys.exit(1)
-    except Exception as e:
+    except BaseException as e: #BaseException so Ctrl-C also cleans up
         print("ERROR: An error occurred:", str(e))
+        _remove_partial(intersect_file)
         sys.exit(1)
 
     return
+
+
+def _remove_partial(path):
+    if os.path.exists(path):
+        os.remove(path)
+        print(f"--- Removed partial output '{path}'")
 
     
 @internal_timer
@@ -167,13 +176,9 @@ def AddPeakInfo(cb_dict, intersect_file, cb_encoder, qname_encoder, delete, verb
         cb_dict[cb_int].nonpeakcount = len(m) - ones_count
     
     if (delete):
-        cmd = "set -o pipefail; rm %s" % intersect_file
         try:
-            subprocess.check_output(cmd, shell=True, executable='/bin/bash', stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError as e:
-            stderr_output = e.output  # This contains the stderr output
-            print("ERROR: removing intersect file. stderr:", stderr_output.decode())
-        except Exception as e:
+            os.remove(intersect_file)
+        except OSError as e:
             print("ERROR: An error occurred while removing intersect file:", str(e))
         
     return
@@ -195,71 +200,25 @@ def TotalReadPairs(cb_dict):
     return tot
 
 
-def Summary(cb_dict, output_as = "str"):
-    #Function to summarize what is going on in cb_dict. 
-    #output_as = "str" essentially stdout. helpful for debugging
-    #otuput_as = "dict" outputting per iteration for visualizations/tracking later on. 
-    
-    def count_edits(cb_dict):
-        edit_list = [int(cb_dict[i].n_edits) for i in cb_dict.keys()]
-        total_cells = np.sum(np.array(edit_list) > 0)
-        total_edits = np.sum(np.array(edit_list))
-        return total_edits, total_cells
-        
-    if output_as == "dict":
-        output_dict = {}
-        output_dict["Ncells"] = len(cb_dict.keys())
-        output_dict["Nreadpairs"] = TotalReadPairs(cb_dict)
-        
-        if (hasattr(cb_dict[list(cb_dict.keys())[0]], 'peaklist')):
-            curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
-            output_dict["Npeakpairs"] = peakPairs
-            output_dict["Nnonpeakpairs"] = nonpeakPairs
-            output_dict["FRIP"] = curr_frip
-        
-        total_edits, total_cells = count_edits(cb_dict)
-        output_dict["Nedits"] = total_edits
-        output_dict["Ncells_with_edits"] = total_cells
-        return output_dict
-        
-    elif output_as == "str":
-        print(len(cb_dict.keys()), ":number of cells")
-        print(TotalReadPairs(cb_dict), ":number of read pairs")
-        
-        if (hasattr(cb_dict[list(cb_dict.keys())[0]], 'peaklist')):
-            curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
-            print(peakPairs, ":number of read pairs in peak regions")
-            print(nonpeakPairs, ":number of read pairs in nonpeak regions")
-            print(curr_frip, ":FRIP")
-        
-        total_edits, total_cells = count_edits(cb_dict)
-        print(total_edits, ":number of edits")
-        print(total_cells, ":number of cells recieving edits")
-        return 
-    
-    else:
-        print("Unknown output type, please fix")
-        sys.exit(1)
+def Summary(cb_dict):
+    #Summarize cb_dict as a dictionary, written to the .summary.txt logs.
+    edit_list = np.array([int(cb_dict[i].n_edits) for i in cb_dict.keys()])
+    curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
 
-#################################################
-
-
-
-#################################################
+    output_dict = {}
+    output_dict["Ncells"] = len(cb_dict.keys())
+    output_dict["Nreadpairs"] = TotalReadPairs(cb_dict)
+    output_dict["Npeakpairs"] = peakPairs
+    output_dict["Nnonpeakpairs"] = nonpeakPairs
+    output_dict["FRIP"] = curr_frip
+    output_dict["Nedits"] = np.sum(edit_list)
+    output_dict["Ncells_with_edits"] = np.sum(edit_list > 0)
+    return output_dict
 
 #################################################
 ## GENERIC DOWNSAMPLING FUNCTIONS
 
-def CountEdits(cb_dict):
-    total_edits = 0
-    total_cells = 0
-    for item in cb_dict.keys():
-        a = int(cb_dict[item].n_edits)
-        total_edits+=a
-        if a > 0: total_cells+=1
-    return total_edits, total_cells
-
-def ChooseCells(cb_dict, N, sample_case, seed, weighted=True):
+def ChooseCells(cb_dict, N, sample_case, seed):
     #sample_case: "random", "peaks", "nonpeaks" -- what we're drawing from. 
     #N: int -- how many reads are we REMOVING
 
@@ -283,28 +242,16 @@ def ChooseCells(cb_dict, N, sample_case, seed, weighted=True):
     tmp = np.repeat(weights, replace_limits)
     repeated_weights = tmp/np.sum(tmp)
     
-    #set seed and sample - return a redundant list of cell barcode names. 
-    #can be done unweighted to contrast, may remove feature in the future. 
-    if (weighted): 
-        np.random.seed(seed)
-        chosen_cells = np.random.choice(repeated_cells, size=int(N), replace=False, p=repeated_weights)
-    else: 
-        np.random.seed(seed)
-        chosen_cells = np.random.choice(repeated_cells, size=int(N), replace=False)
-    
+    #set seed and sample - return a redundant list of cell barcode names.
+    np.random.seed(seed)
+    chosen_cells = np.random.choice(repeated_cells, size=int(N), replace=False, p=repeated_weights)
+
     #Count how many times the CB was selected. {"CB":5, "CB2":10}
     chosen_cells_count = dict(Counter(chosen_cells)) #count how may times cell barcode appears
     
     #for all cells, save how many edits they're getting in the Cells object. 
     for i in chosen_cells_count: cb_dict[i].n_edits = chosen_cells_count[i] #update class
     
-    return
-
-
-def ResetEdits(cb_dict):
-    #reset the number of edits to use the original object.
-    #just for testing + debugging.
-    for el in cb_dict: cb_dict[el].n_edits = 0
     return
 
 
@@ -421,13 +368,21 @@ def DownsampleReads(cb_dict, N_desired_reads, seed, verbose):
 def DownsampleFRIP(cb_dict, frip, seed, verbose):
     curr_frip, peakPairs, nonpeakPairs = CalculateFRIP(cb_dict)
     desired_frip = frip
-     
+
+    #CalculateFRIP returns "NA" when there are no peak reads, which cannot be compared below
+    if peakPairs == 0:
+        print("ERROR: No reads overlap peaks in this dictionary, so FRIP cannot be downsampled. "
+              "Check that the peak file passed to create-dictionary matches the BAM."); sys.exit(1)
+    #both formulas below divide by frip or 1-frip
+    if not 0 < desired_frip < 1:
+        print(f"ERROR: FRIP must be between 0 and 1 (exclusive), got {desired_frip}"); sys.exit(1)
+
     if curr_frip > desired_frip: #need to remove peak reads
         Npeak_to_remove = peakPairs - round((desired_frip*nonpeakPairs)/(1-desired_frip)) #p/n+p = frip, solved for p
-        
+
         #user check that we're not decimating either peak/nonpeak counts too much (here, setting as 1000 read pairs)
         if Npeak_to_remove > peakPairs-1000:
-            print("WARNING: Minimum amount of peak reads is 1000. Cannot satisfy this FRIP value"); sys.exit(1)
+            print("ERROR: Minimum amount of peak reads is 1000. Cannot satisfy this FRIP value"); sys.exit(1)
         
         #choose cells to remove peak reads from 
         ChooseCells(cb_dict, N=Npeak_to_remove, seed=seed, sample_case ="peaks")
@@ -438,7 +393,7 @@ def DownsampleFRIP(cb_dict, frip, seed, verbose):
         Nnonpeak_to_remove = nonpeakPairs - round((peakPairs*(1-desired_frip))/desired_frip) #p/n+p = frip, solved for n
         
         if Nnonpeak_to_remove > nonpeakPairs-1000:
-            print("WARNING: Minimum amount of nonpeak reads is 1000. Cannot satisfy this FRIP value"); sys.exit(1)
+            print("ERROR: Minimum amount of nonpeak reads is 1000. Cannot satisfy this FRIP value"); sys.exit(1)
         
         ChooseCells(cb_dict, N=Nnonpeak_to_remove, seed=seed, sample_case ="nonpeaks")
         for item in cb_dict.keys():
@@ -469,17 +424,19 @@ def _submit_cmd(cmd, err = "ERROR"):
 @internal_timer   
 def GenerateOutputBam(input_bam, read_file, nproc, output_file, verbose):
         
-    cmd = 'samtools view -N %s -o %s %s -@ %s' % (read_file, output_file, input_bam, str(nproc))
+    q = shlex.quote
+    cmd = 'samtools view -N %s -o %s %s -@ %s' % (q(read_file), q(output_file), q(input_bam), str(nproc))
     status = _submit_cmd(cmd, "ERROR: in generate output bam")
     if status != 0: return status
 
-    cmd2 = 'samtools index %s' % output_file
+    cmd2 = 'samtools index %s' % q(output_file)
     return _submit_cmd(cmd2, "ERROR: in indexing output bam")
 
-    
+
 @internal_timer
-def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):    
+def GenerateOutputFragment(input_bam, output_fragment, nproc, verbose):
     tmp_output = output_fragment + "_tmp"
+    q = shlex.quote
 
     #strip the whole suffix, not just the last extension: splitext only removes '.bgz',
     #which left '.frags.tsv' embedded in every cell name in the fragment file.
@@ -490,7 +447,7 @@ def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):
             sample_name = sample_name[:-len(suffix)]
             break
 
-    cmd1 = "sinto fragments --collapse_within -p %s -b %s -f %s > /dev/null" % (nproc, input_bam, tmp_output)
+    cmd1 = "sinto fragments --collapse_within -p %s -b %s -f %s > /dev/null" % (nproc, q(input_bam), q(tmp_output))
     status = _submit_cmd(cmd1, "ERROR: in sinto fragment creation (step 1)")
     if status != 0:
         #bail out here: without the tmp file, steps 2 and 4 can only fail too, and
@@ -499,16 +456,22 @@ def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):
         return status
 
     #pound and dash do not work btw for archr.
-    awk_part = '{print $1, $2, $3, "%s:"$4, $5}' % sample_name
-    cmd2 = fr"bedtools sort -i {tmp_output} | awk '{awk_part}' | tr ' ' '\t' | bgzip -c > {output_fragment}"
+    #pass the sample name to awk as a variable rather than splicing it into the program text
+    awk_part = '{print $1, $2, $3, name":"$4, $5}'
+    cmd2 = (f"bedtools sort -i {q(tmp_output)} | awk -v name={q(sample_name)} {q(awk_part)} "
+            fr"| tr ' ' '\t' | bgzip -c > {q(output_fragment)}")
     status = _submit_cmd(cmd2, "ERROR: bedtools bgzipped (step 2)")
     if status != 0: return status
 
     #cmd3 = f"tabix {outfile}"
     #_submit_cmd(cmd3, "ERROR: in indexing bgzipped (step 3)")
 
-    cmd4 = f"rm {tmp_output}"
-    return _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
+    try:
+        os.remove(tmp_output)
+    except OSError as e:
+        print("ERROR: in removing file (step 4)", str(e))
+        return 1
+    return 0
 
 
 @internal_timer

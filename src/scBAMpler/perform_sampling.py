@@ -1,8 +1,7 @@
 #perform_sampling.py
-import os, pysam, time, pickle, shutil, sys
+import os, time, pickle, shutil, sys
 from datetime import timedelta
 from scBAMpler import downsampling_functions as dsfs
-from scBAMpler.downsampling_functions import Cells
 
 def main(args):    
 
@@ -56,7 +55,7 @@ def main(args):
     dsfs.WriteLog(args.output_prefix+".summary.txt", 
                   {'input_file':args.input_pickle, 'sampling_type':args.edit, 'value': args.value, 'seed':args.seed}, 
                   {'N_cells_removed': cells_pre-cells_post, 'N_reads_removed':rp_pre-rp_post}, 
-                  dsfs.Summary(cb_dict, output_as = "dict"), verbose=args.verbose)
+                  dsfs.Summary(cb_dict), verbose=args.verbose)
 
     output_bam = args.output_prefix+".bam"
     returncode = dsfs.GenerateOutputBam(args.input_bam, read_file, args.nproc, output_bam, verbose=args.verbose)
@@ -66,12 +65,9 @@ def main(args):
 
     if args.output_fragment:
         validateTools("sinto")
-        frag_status = dsfs.GenerateOuputFragment(output_bam, args.output_prefix+".frags.tsv.bgz", args.nproc, verbose=args.verbose)
+        frag_status = dsfs.GenerateOutputFragment(output_bam, args.output_prefix+".frags.tsv.bgz", args.nproc, verbose=args.verbose)
         if frag_status != 0:
             print(f"ERROR: failed to write '{args.output_prefix}.frags.tsv.bgz'.")
             sys.exit(1)
 
-    
-if __name__ == '__main__':
-    main()
 

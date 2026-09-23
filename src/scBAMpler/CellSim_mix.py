@@ -62,7 +62,7 @@ Output
       dominant_label            most common label in the combination
       dominant_label_perc       % of cells from the dominant label
       closest_label             label centroid closest to this combination
-      label_dist_*              distance to each label's centroid (one col each)
+      dist_to_<label>           distance to each label's centroid (one col each)
       groups_sampled            value of --groups used to generate this row
 
 """
@@ -318,6 +318,19 @@ def main(args):
             print(f"  ft_size={ft_size:>6}  r={r}  generated=0   SKIPPED: {msg}")
             continue
 
+        #a single cluster has no pairs, so mean_pearson_corr and sse_pearson_corr would be NaN
+        #and slip past downstream SSE filters. A lone cluster is not a mixture anyway.
+        if r == 1:
+            msg = (
+                f"ft-size {ft_size} is a single cluster of {args.cluster_size} cells, so there "
+                f"are no pairwise correlations to score and no combinations were generated for "
+                f"it. Use ft-sizes of at least {2 * args.cluster_size} "
+                f"(2 clusters x {args.cluster_size} cells)."
+            )
+            warnings.warn(msg)
+            print(f"  ft_size={ft_size:>6}  r={r}  generated=0   SKIPPED: {msg}")
+            continue
+
         #with combinations sampled as sets, C(pool, r) is a hard ceiling on how many
         #distinct combinations can exist, regardless of --n-combos.
         n_possible = math.comb(pool_n, r)
@@ -337,7 +350,7 @@ def main(args):
         raise ValueError(
             f"No combinations could be generated for any requested ft-size "
             f"{args.ft_sizes}. With {pool_n} clusters of {args.cluster_size} cells, "
-            f"ft-sizes must be at most {max_ft}."
+            f"ft-sizes must be between {2 * args.cluster_size} and {max_ft}."
         )
 
     print(f"Total combinations to score: {len(possible_combos)}")

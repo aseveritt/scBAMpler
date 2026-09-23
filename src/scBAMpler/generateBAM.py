@@ -33,13 +33,11 @@ def main(args):
         #build the fragment path from output_bam so it lands beside the BAM rather than
         #in the current working directory, matching what `sampler` does.
         output_fragment = os.path.splitext(args.output_bam)[0] + ".frags.tsv.bgz"
-        frag_status = dsfs.GenerateOuputFragment(args.output_bam, output_fragment, args.nproc, verbose=args.verbose)
+        frag_status = dsfs.GenerateOutputFragment(args.output_bam, output_fragment, args.nproc, verbose=args.verbose)
         if frag_status != 0:
             print(f"ERROR: failed to write '{output_fragment}'.")
             sys.exit(1)
 
     return
-    
-if __name__ == '__main__':
-    main()
+
     

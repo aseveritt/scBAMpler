@@ -16,7 +16,7 @@ def main(argv=None):
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Subcommand: create-dictionary
-    parser_buildInput = subparsers.add_parser("create-dictionary", help="Create Input Dictionary for scBAMpler:sampling")
+    parser_buildInput = subparsers.add_parser("create-dictionary", help="Create the input dictionary for scBAMpler sampler")
     parser_buildInput.add_argument('-b', '--bam_file', 
                                    help='Path to the coordinate sorted, input BAM file.', required=True, type=str)
     parser_buildInput.add_argument('-p', '--peak_file', 
@@ -49,7 +49,7 @@ def main(argv=None):
     parser_sampler.add_argument('--seed', 
                                 help='Random seed for reproducibility.', required=False, default=42, type=int)
     parser_sampler.add_argument('--nproc', 
-                                help='Number of processors to use.', required=True, type=int, default=1)
+                                help='Number of processors to use.', required=False, type=int, default=1)
     parser_sampler.add_argument('--output_fragment', 
                                 help='If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file. ', 
                                 required=False, action="store_true")
@@ -74,7 +74,7 @@ def main(argv=None):
                             help='If set, will also output a `fragment.tsv.bgz` file in addition to the BAM file. ', 
                             required=False, action="store_true")
     parser_justBAM.add_argument('--nproc', 
-                                help='Number of processors to use.', required=True, type=int, default=1)
+                                help='Number of processors to use.', required=False, type=int, default=1)
 
     parser_justBAM.add_argument('-v', '--verbose',
                                 help='Print update messages.', required=False, action="store_true")
@@ -89,7 +89,7 @@ def main(argv=None):
                                help="Path to input HDF5 file (peakmat_input.h5)")
     parser_pseudo.add_argument("--output", 
                                required=True, metavar="FILE", 
-                               help="Path for output pickle file (e.g. medoids_s5000.pickle)")
+                               help="Path for output pickle file (e.g. medoids_s50.pickle)")
     parser_pseudo.add_argument("--dimred", 
                                default="umap", choices=["umap", "tsne"], 
                                help="Embedding to use for clustering")

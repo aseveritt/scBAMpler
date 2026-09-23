@@ -62,11 +62,8 @@ def main(args):
         pickle.dump([cb_dict, cb_encoder, qname_encoder], f) 
     
     mylog = {'bam':args.bam_file, 'peak':args.peak_file}
-    mylog.update(dsfs.Summary(cb_dict, output_as = "dict"))
+    mylog.update(dsfs.Summary(cb_dict))
     with open(os.path.splitext(args.output_file)[0]+'.summary.txt', 'w') as f:
         for i in mylog: f.write(i + "\t" + str(mylog[i]) + "\n")
 
-
-if __name__ == '__main__':
-    main()
 
