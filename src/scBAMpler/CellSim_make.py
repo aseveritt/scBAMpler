@@ -27,15 +27,6 @@ Arguments
     --nproc         Number of parallel processes for clustering (default: 8)
     --seed          Random seed for the constrained k-means clustering (default: 42,
                     the value used for the manuscript)
-
-Notes
------
-This reproduces the implementation used for the manuscript. Where that implementation
-differs from a textbook approach the behaviour has been kept as-is and commented
-in place (see perform_tfidf); changing it would change published results.
-
-A <output>.log file is written alongside the output pickle, recording parameters,
-cell and cluster counts, timings, and any warnings raised during the run.
 """
 
 import os
