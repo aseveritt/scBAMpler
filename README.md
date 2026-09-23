@@ -26,16 +26,15 @@ Then, create an environment with required dependencies. Installation and informa
 
 ## Download Test Data
 
-All inputs needed to run this tutorial are available on [Zenodo](TBD) as individual files, so you
-can download only what the section you care about needs. Nothing in the tutorial requires you to
+All inputs needed to run this tutorial are available on [Zenodo](TBD) as individual files. Nothing in the tutorial should require you to
 regenerate an input.
 
 | File | Needed for | Description |
 |---|---|---|
-| `HEPG2_subset.bam` | Data Quality Usage, all steps | Subset of an ENCODE HepG2 scATAC-seq experiment, coordinate sorted. |
-| `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, blacklist filtered. See docs/build_testdata.sh |
-| `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined (1,111 cells passing ArchR QC). ~15MB. |
-| `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. Defines the row order of the peak matrix. |
+| `HEPG2_subset.bam` | Data Quality Usage, all steps | Subset of an ENCODE HepG2 scATAC-seq experiment |
+| `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, exclusion filtered. See docs/build_testdata.sh |
+| `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined. |
+| `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. |
 | `K562_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE K562 experiment. |
 | `MCF7_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE MCF-7 experiment. |
 
@@ -75,7 +74,7 @@ $ Rscript helper_scripts/peak_calling/call_peaks.R \
 * `--outdir`  
     - Directory where output file will be saved.
 * `--peak_length`  
-    - Length to which all peaks will be standardized.
+    - Length to standardize all peaks to.
 * `--txdb`  
     - TxDb package used to get chromosome lengths.  
       Default: `TxDb.Hsapiens.UCSC.hg38.knownGene`
@@ -249,14 +248,15 @@ The label column is what `--label-col` refers to in later steps, and is the grou
 homogeneity you will be varying — `CellLine` in the test data, but it can be any categorical
 per-cell annotation.
 
-We generated the distributed file from an ArchR project. That route requires R and is not part of
+We generated the file from an ArchR project. That route requires R and is not part of
 the pipeline itself, so it lives in
 [Appendix: building the H5 from an ArchR project](#appendix-building-the-h5-from-an-archr-project).
 
 ### 2. Make small, pseudobulks of identical size. 
-Next, we build pseudobulk profiles and collect summary information to support a bottom-up approach for constructing mixed synthetic populations.
+Next, we build pseudobulk profiles and collect summary information to support the bottom-up approach for constructing mixed synthetic populations.
 
-Cells are clustered within each group given by --label-col; CellLine is used here, but any categorical annotation works. --cluster-size sets the unit for everything downstream — we use 50 because the tutorial dataset is small; the manuscript used 5000. Pass the same value to mix-pseudobulks in the next step.
+Cells are clustered within each group given by --label-col; CellLine is used here, but any categorical annotation works. 
+--cluster-size sets the unit for everything downstream — we use 50 because the tutorial dataset is small; the manuscript used 5000. Pass the same value to mix-pseudobulks in the next step.
 
 ```
 $ scBAMpler make-pseudobulks \
@@ -279,8 +279,7 @@ $ scBAMpler make-pseudobulks \
 * `--label-col`  
     - Name of the grouping column in the embedding (column 3 of the H5 embedding table)
 * `--cluster-size`  
-    - Target number of cells per pseudo-bulk cluster (default 500 cells)
-    - Groups with fewer cells than this are left unclustered; the run warns and reports how many cells were affected.
+    - Number of cells per pseudo-bulk cluster (default 500 cells)
 * `--nproc`  
     - Number of parallel processes for clustering. 
 * `--seed`  
@@ -340,7 +339,6 @@ cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.
     - Must match the `--cluster-size` used in make-pseudobulks.
 * `--ft-sizes`
     - Target footprint sizes in cells to sample combinations for. Combinations of r=ft_size/cluster_size clusters are drawn.
-    - Sizes that round to a single cluster (r=1) are skipped with a warning, since a lone cluster has no pairwise correlations to score.
     - (default: 500 1000 2000 5000 10000 15000 20000)
 * `--label-col`  
     - Name of the grouping column (default: CellLine)
@@ -370,7 +368,7 @@ command.
 
 The previous step will generate many candidate populations, here we prioritize what are important qualities
 to select on. In the manuscript, we focus on **chromatin similarity** (e.g. distance to a reference label's centroid) 
-and **sequencing depth** (e.g. total peak read pairs). The notebook selects on both at once to give 
+and **sequencing depth** (e.g. total peak read pairs). The notebook selects on both at once to find 
 populations that differ in homogeneity while holding depth roughly constant, and vice versa, so the two effects can be separated downstream. Candidates that are poorly cohesive, or too far from their reference
 label, are excluded first.
 
@@ -396,7 +394,7 @@ and the CSV from step 3, and writes the barcode files that step 5 consumes.
 ### 5. Extract each population into a BAM
 Finally, turn the selected populations into actual datasets. This writes one bash script per
 population rather than running anything, since each population needs one pass over a BAM per
-contributing label (roughly 3 minutes per population on the tutorial subset).
+label (roughly 3 minutes per population on the tutorial subset).
 
 Each script filters every contributing label's BAM to that population's barcodes, merges the
 results into a single BAM, indexes it, and removes the intermediates. A mixed population draws
@@ -424,8 +422,9 @@ notebook:
 <barcode-dir>/
 ├── combo_0.HEPG2.barcodes.csv
 ├── combo_0.K562.barcodes.csv
-├── combo_1.HEPG2.barcodes.csv
+├── combo_0.MCF7.barcodes.csv
 └── combo_1.MCF7.barcodes.csv
+└── combo_1.HEPG2.barcodes.csv
 ```
 
 * **Filename:** `combo_<ID>.<label>.barcodes.csv`
@@ -461,8 +460,7 @@ notebook:
 
 #### Output
 * `scripts/combo_<ID>.sh`
-    - One extraction script per population. All paths are absolute, so they can be run or
-      submitted from any directory.
+    - One extraction script per population. All paths are absolute, so they can be run or submitted from any directory.
 * `run_all.sh`
     - Runs every script above in turn
 * `combo_<ID>.bam` (+ `.bam.bai`)
@@ -475,9 +473,9 @@ notebook:
 
 ## Appendix: building the H5 from an ArchR project
 
-This is how `peakmat_input.h5` was produced, but it's not a required step — the end file is in the
-Zenodo archive. Any file matching the schema in the extension's step 1 will work. This section
-exists for two audiences: anyone reproducing our inputs from scratch, and anyone adapting the
+This is how `peakmat_input.h5` was produced, but it's not a required step — the output file is in the
+Zenodo archive. Any file matching the description in the extension's step 1 will work. This section
+is for anyone reproducing our inputs from scratch, and adapting the
 workflow to their own ArchR project.
 
 `helper_scripts/H5_from_ArchR/MakeH5.R` extracts a peak matrix and embeddings from an ArchR project and writes
@@ -494,8 +492,7 @@ them to HDF5. It requires:
 * **One BAM per cell line**, coordinate sorted, with barcodes in the `CB` tag. The distributed data
   uses `HEPG2_subset.bam`, `K562_subset.bam`, and `MCF7_subset.bam`.
 
-* **A union peak set** spanning all cell lines, which defines the rows of the matrix. Build it by
-  calling peaks per cell line, then merging with `--union_files`:
+* **A union peak set** spanning all cell lines, which defines the rows of the matrix. :
 
     ```
     $ Rscript helper_scripts/peak_calling/call_peaks.R \
@@ -515,8 +512,8 @@ Input paths, sample names, and the output filename are constants at the top of t
 edit them to point at your own data. The script builds arrow files, adds the peak matrix, runs
 iterative LSI, then UMAP and tSNE, and writes the result to `test_data/peakmat_input.h5`.
 
-Note that ArchR applies its own QC filtering, so the cell count in the H5 is smaller than the number
-of barcodes in the input BAMs: the distributed file contains **5,511 cells** from an input of 2,000
+Note that ArchR applies its own QC filtering, so the cell count in the H5 is a little smaller than the number
+of barcodes in the input BAMs: this file contains **5,511 cells** from an input of 2,000
 barcodes per cell line. If you rebuild it and land near that number, you are in the right place.
 
 ---------------
