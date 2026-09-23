@@ -43,7 +43,7 @@ def main(argv=None):
                                 help='Prefix for all output files.', required=True, type=str)
     parser_sampler.add_argument('--downsample_by', dest="edit",
                                 help='Type of downsampling to perform.', required=True, type=str,
-                                choices=["cells", "reads", "frip"]) #"peakreads" is not implemented in perform_sampling; re-add here when it is
+                                choices=["cells", "reads", "frip"])
     parser_sampler.add_argument('--downsample_to', dest="value",
                                 help='Target value for the downsampling operation. ', required=True, type=float)
     parser_sampler.add_argument('--seed', 

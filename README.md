@@ -322,7 +322,7 @@ $ scBAMpler mix-pseudobulks \
     --cluster-size 50 \
     --ft-sizes 200 250 300 250 400
 
-cat combos_all.csv combos_k562_hepg2.csv > combos_combined.csv
+cat example_output/combos_all.csv <(tail -n +2 example_output/combos_k562_hepg2.csv) > example_output/combos_combined.csv
 ```
 
 #### Input Parameters

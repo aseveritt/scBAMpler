@@ -24,12 +24,20 @@ peak_bed_file <- "test_data/union_standardized_500bp.bed"
 
 h5_output_file <- "test_data/peakmat_input.h5"
 
+archr_dir <- "test_data/CLsub"
+
 
 # ── LOAD PROJECT AND PEAKS ────────────────────────────────────────────────────
 
+# write Arrow files and QC directly into the project dir (defaults are relative to cwd)
+dir.create(file.path(archr_dir, "ArrowFiles"), recursive = TRUE, showWarnings = FALSE)
+sample_names <- c("HEPG2", "K562", "MCF7")
+
 arrows <- createArrowFiles(
   inputFiles = c("test_data/HEPG2_subset.bam", "test_data/K562_subset.bam", "test_data/MCF7_subset.bam"),
-  sampleNames = c("HEPG2", "K562", "MCF7"),
+  sampleNames = sample_names,
+  outputNames = file.path(archr_dir, "ArrowFiles", sample_names),
+  QCDir = file.path(archr_dir, "QualityControl"),
   addTileMat = TRUE,
   addGeneScoreMat = FALSE,
   bcTag = "CB", 
@@ -40,8 +48,8 @@ arrows <- createArrowFiles(
 
 proj <- ArchRProject(
   ArrowFiles = arrows,
-  outputDirectory = "test_data/CLsub",
-  copyArrows = TRUE
+  outputDirectory = archr_dir,
+  copyArrows = FALSE
 )
 
 peak.gr <- import(peak_bed_file)

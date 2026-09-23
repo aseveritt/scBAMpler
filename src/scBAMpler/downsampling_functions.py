@@ -4,7 +4,6 @@ import pysam, os, subprocess, sys, io, itertools, functools, pickle
 import pandas as pd
 import numpy as np
 from collections import Counter
-from pathlib import Path
 from datetime import timedelta, datetime
 
 def internal_timer(func):
@@ -370,39 +369,6 @@ def OutputDict(cb_dict, encoder, out_readfile, verbose):
         for i in results_str: f.write(i+"\n")
     
     return
-    
-@internal_timer
-def OutputDict_DEFUNCT(cb_dict, encoder, myfile, case, tag="FIXME"):
-    #output dictionary as a txt file of either 
-    #1) "reads" seperated by newlines
-    ### (note this is NOT sorted, so probably need to fix later)
-    #2) "cells" which is cells+tab+tag which fits with sinto needs. 
-    
-    if case == "reads" or case == "frip" or case == "peakreads":
-        tmp = [v.readslist for v in cb_dict.values()]
-        results_int = list(itertools.chain.from_iterable(tmp)) #numeric list of reads needed. 
-        
-        inv_encoder = {v: k for k, v in encoder.items()} #invert the cb_encoder dictionary.
-        results_str = [inv_encoder[i] for i in results_int]
-        results_str = sorted(results_str) #easier later, but can remove depending on how long it takes
-
-        with open(myfile, mode='wt', encoding='utf-8') as f:
-            for i in results_str: f.write(i+"\n")
-        return 
-    
-    elif case == "cells":
-        inv_encoder = {v: k for k, v in encoder.items()} #invert the cb_encoder dictionary.
-        results_int = list(cb_dict.keys()) #for all the CB we need
-        results_str = [inv_encoder[i] for i in results_int] #retrieve the string value 
-        
-        with open(myfile, mode='wt', encoding='utf-8') as f:
-            for i in results_str: f.write(i+"\t"+tag+"\n") #print those strings and cell tag for sinto. 
-        return
-    
-    else: print("ERROR: unknown case in OutputDict. Please fix."); sys.exit(1)
-    
-    return
-    
 
 #################################################
 ## FUNCTIONS SPECIFIC TO DOWNSAMPLING CELLS
@@ -414,6 +380,10 @@ def DownsampleCells(cb_dict, N_cells, seed, verbose):
     #either return as a (1) dictionary -- for consistency with other functions
     #or (2) list of cell names, obv faster. 
     
+    if N_cells < 0 or N_cells > len(cb_dict):
+        print("ERROR: Requested %d cells but must be between 0 and %d (current total)" % (N_cells, len(cb_dict)))
+        sys.exit(1)
+
     np.random.seed(seed)
     chosen_cells = np.random.choice(list(cb_dict.keys()), size=int(N_cells), replace=False)
     cb_dict_sub = {cb:cb_dict[cb] for cb in chosen_cells}
@@ -427,10 +397,10 @@ def DownsampleCells(cb_dict, N_cells, seed, verbose):
 def DownsampleReads(cb_dict, N_desired_reads, seed, verbose):
 
     total_reads = TotalReadPairs(cb_dict)
-    Nreads_to_remove = total_reads-N_desired_reads
-    if (total_reads < Nreads_to_remove): 
-        print("ERROR: Requested to remove more read pairs than currently exists")
+    if N_desired_reads < 0 or N_desired_reads > total_reads:
+        print("ERROR: Requested %d read pairs but must be between 0 and %d (current total)" % (N_desired_reads, total_reads))
         sys.exit(1)
+    Nreads_to_remove = total_reads-N_desired_reads
     
     #choose which cells are going to get downsampled and by how much. stored in {'cb1':{n_edits = 3}}
     ChooseCells(cb_dict, N=Nreads_to_remove, seed=seed, sample_case ="random")
@@ -507,28 +477,6 @@ def GenerateOutputBam(input_bam, read_file, nproc, output_file, verbose):
     return _submit_cmd(cmd2, "ERROR: in indexing output bam")
 
     
-@internal_timer   
-def GenerateOutputBam_DEFUNCT(input_type, bam_file, input_file, nproc, output_dir, output_file=None):
-          
-    full_path_output = '%s/%s' % (output_dir, output_file) #have to do this bc programs want different things unfortunately. 
-    
-    if input_type == "cells":
-        cmd = 'sinto filterbarcodes -b %s -c %s -p %s --outdir %s' % (bam_file, input_file, str(nproc), output_dir)
-    
-    elif input_type == "reads" or input_type == "frip" or input_type == "peakreads":
-        if output_file == None: print("ERROR: need to specify outputfile name that ends in .bam"); sys.exit(1)
-        if not os.path.exists(output_dir): os.mkdir(output_dir)
-        cmd = 'samtools view -N %s -o %s %s -@ %s' % (input_file, full_path_output, bam_file, str(nproc))
-    
-    else:
-        print("ERROR: Invalid input type, please correct"); sys.exit(1)
-    
-    _submit_cmd(cmd, "ERROR: in generate output bam")
-    cmd2 = 'samtools index %s' % full_path_output
-    _submit_cmd(cmd2, "ERROR: in generate output bam")
-    return 0
-
-    
 @internal_timer
 def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):    
     tmp_output = output_fragment + "_tmp"
@@ -562,31 +510,6 @@ def GenerateOuputFragment(input_bam, output_fragment, nproc, verbose):
     cmd4 = f"rm {tmp_output}"
     return _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
 
-
-def GenerateOuputFragment_DEFUNCT(input_bam, output_fragment, nproc):
-
-    maindir = os.path.dirname(input_bam)
-    out_name = Path(input_bam).stem
-    sample_name = (os.path.splitext(out_name)[0]).split('_')[0]
-    
-    tmp_outfile = f"{maindir}/tmp_{out_name}.frags.tsv"
-    outfile = f"{maindir}/{out_name}.frags.tsv.bgz"
-    
-    cmd1 = "sinto fragments --collapse_within -p %s -b %s -f %s" % (nproc, input_bam, tmp_outfile)
-    _submit_cmd(cmd1, "ERROR: in sinto fragment creation (step 1)")
-    
-    #pound and dash do not work btw for archr. 
-    awk_part = '{print $1, $2, $3, "%s:"$4, $5}' % sample_name
-    cmd2 = fr"bedtools sort -i {tmp_outfile} | awk '{awk_part}' | tr ' ' '\t' | bgzip -c > {outfile}"
-    _submit_cmd(cmd2, "ERROR: bedtools bgzipped (step 2)")
-    
-    #cmd3 = f"tabix {outfile}"
-    #_submit_cmd(cmd3, "ERROR: in indexing bgzipped (step 3)")
-    
-    cmd4 = f"rm {tmp_outfile}"
-    _submit_cmd(cmd4, "ERROR: in removing file (step 4)")
-    
-    return
 
 @internal_timer
 def WriteLog(output_file, a, b, c, verbose):

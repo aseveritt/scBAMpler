@@ -175,6 +175,8 @@ standardize_summits <- function(summit_file, out_dir, exclusion_list, peaklen, t
   results <- mclapply(seq_along(data_chunks), 
                     function(i){wrapper_for_per_chromosome(data_chunks[[i]], peaklen)},
                     mc.cores = ncores)
+  # EDITED BY AMANDA: a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
+  if (any(vapply(results, function(r) is.null(r) || inherits(r, "try-error"), logical(1)))) stop("mclapply worker(s) failed (likely OOM) -- rerun with more memory or fewer --cores")
   
   unique_peaks = unlist(lapply(results, `[[`, 1))
   max_groupsof2 = unlist(lapply(results, `[[`, 2))
@@ -284,6 +286,8 @@ make_union <- function(infiles, outdir, outfile, ncores=1){
   results <- mclapply(seq_along(data_chunks), 
                       function(i){wrapper_for_per_chromosome(data_chunks[[i]], -1)},
                       mc.cores = ncores)
+  # EDITED BY AMANDA: a killed worker (e.g. OOM) returns NULL and its chromosomes were silently dropped
+  if (any(vapply(results, function(r) is.null(r) || inherits(r, "try-error"), logical(1)))) stop("mclapply worker(s) failed (likely OOM) -- rerun with more memory or fewer --cores")
     
   unique_peaks = unlist(lapply(results, `[[`, 1))
   max_groupsof2 = unlist(lapply(results, `[[`, 2))

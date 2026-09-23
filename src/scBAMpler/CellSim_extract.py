@@ -200,6 +200,16 @@ def main(args):
     bam_map = parse_bam_args(args.bam)
     print(f"BAMs provided for {len(bam_map)} label(s): {sorted(bam_map)}")
 
+    unindexed = [lab for lab, bam in sorted(bam_map.items())
+                 if not any(os.path.isfile(p) for p in
+                            (bam + ".bai", bam + ".csi", os.path.splitext(bam)[0] + ".bai"))]
+    #sinto filterbarcodes needs an index for every input BAM, so the scripts would fail without one
+    if unindexed:
+        print(f"WARNING: no index found for the BAM(s) of {unindexed}. sinto requires one, "
+              f"so index them before running the extraction scripts:")
+        for lab in unindexed:
+            print(f"    samtools index {bam_map[lab]}")
+
     barcode_dir = os.path.abspath(args.barcode_dir)
     if not os.path.isdir(barcode_dir):
         _fail(f"--barcode-dir is not a directory: {barcode_dir}")
