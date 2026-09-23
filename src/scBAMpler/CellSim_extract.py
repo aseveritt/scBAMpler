@@ -3,23 +3,18 @@ CellSim_extract.py — Write Extraction Scripts for Selected Populations
 
 Overview
 --------
-Takes a directory of barcode files describing selected populations and emits one bash
-script per population. Each script filters every contributing label's BAM down to that
-population's barcodes, merges the results into a single BAM, indexes it, and removes the
+Inputs are a directory of barcode files describing a selected populations and outputs one bash
+script per population. Each script (1) filters the contributing BAM down to the specific/requested
+population's barcodes, (2) merges the results into a single BAM, (3) indexes it, and (4) removes the
 intermediates.
-
-Nothing is executed here. Extraction is expensive -- one pass over a BAM per label per
-population -- so the scripts are written for you to run, submit to a scheduler, or
-inspect first.
 
 A mixed population draws cells from more than one experiment, so its reads live in more
 than one BAM. That is why one BAM must be given per label, and why each script runs sinto
 once per label before merging.
 
-Input
------
-There is no manifest file. Populations are discovered from the barcode filenames, which
-carry everything needed:
+Typically, this can be fairly expensive so its structure to run on a scheduler. 
+
+Populations are discovered from the barcode filenames, which carry everything needed:
 
     <barcode-dir>/combo_<ID>.<label>.barcodes.csv
 
