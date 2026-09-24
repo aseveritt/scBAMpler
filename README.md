@@ -26,8 +26,7 @@ Then, create an environment with required dependencies. Installation and informa
 
 ## Download Test Data
 
-All inputs needed to run this tutorial are available on [Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.16282810.svg)](https://doi.org/10.5281/zenodo.16282810) as individual files. Nothing in the tutorial should require you to
-regenerate an input.
+All inputs needed to run this tutorial are available on [Zenodo](https://zenodo.org/records/16282810) as individual files. Nothing in the tutorial should require you to regenerate an input.
 
 | File | Needed for | Description |
 |---|---|---|
