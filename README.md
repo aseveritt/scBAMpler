@@ -34,6 +34,7 @@ All inputs needed to run this tutorial are available on [Zenodo](https://zenodo.
 | `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, exclusion filtered. See docs/build_testdata.sh |
 | `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined. |
 | `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. |
+| `example_output.tar.gz` | NA | Example output of this tutorial |
 
 * **Data Quality Usage only** — `HEPG2_subset.bam` and `HEPG2_subset_standardized_500bp.bed`.
 * **Exploring the extension** — `peakmat_input.h5` alone is enough to run steps 2 through 4.
