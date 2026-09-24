@@ -26,7 +26,7 @@ Then, create an environment with required dependencies. Installation and informa
 
 ## Download Test Data
 
-All inputs needed to run this tutorial are available on [Zenodo](TBD) as individual files. Nothing in the tutorial should require you to
+All inputs needed to run this tutorial are available on [Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.16282810.svg)](https://doi.org/10.5281/zenodo.16282810) as individual files. Nothing in the tutorial should require you to
 regenerate an input.
 
 | File | Needed for | Description |
@@ -35,9 +35,6 @@ regenerate an input.
 | `HEPG2_subset_standardized_500bp.bed` | Data Quality Usage, step 2 onward | Standardized 500bp peaks called on `HEPG2_subset.bam`, exclusion filtered. See docs/build_testdata.sh |
 | `peakmat_input.h5` | Cell Homogeneity Extension, steps 2–4 | Peak-by-cell accessibility matrix plus UMAP/tSNE embeddings for three cell lines combined. |
 | `union_standardized_500bp.bed` | Cell Homogeneity Extension | Union peak set across all three cell lines. |
-| `K562_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE K562 experiment. |
-| `MCF7_subset.bam` | Cell Homogeneity Extension, extracting mixed populations | Subset of an ENCODE MCF-7 experiment. |
-
 
 * **Data Quality Usage only** — `HEPG2_subset.bam` and `HEPG2_subset_standardized_500bp.bed`.
 * **Exploring the extension** — `peakmat_input.h5` alone is enough to run steps 2 through 4.
